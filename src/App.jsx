@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { supabase } from "./supabaseClient";
 import {
   Search, Menu, X, ChevronRight, ChevronDown, Heart, Bookmark, Share2, Code2,
   Link2, Globe, Users, FolderKanban, Building2, Sparkles, Eye,
@@ -9,7 +9,6 @@ import {
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
 } from "recharts";
-import { supabase } from "./supabaseClient";
 
 /* ---------------------------------- tokens --------------------------------- */
 
@@ -1248,13 +1247,40 @@ function SubmitProjectPage({ go }) {
 /* ------------------------------------- app -------------------------------------- */
 
 export default function App() {
-  useEffect(() => { supabase.from("campuses").select("*").then(({ data, error }) => { if (error) console.error("Supabase error:", error); else console.log("Campuses from database:", data); }); }, []);
   const [view, setView] = useState("home");
   const [selectedId, setSelectedId] = useState(null);
   const [role, setRole] = useState("visitor");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [liked, setLiked] = useState(new Set());
   const [bookmarked, setBookmarked] = useState(new Set());
+  const [, forceRerender] = useState(0);
+
+  // Load real campuses from Supabase and swap them into the CAMPUSES array
+  // that the rest of the app already reads from.
+  useEffect(() => {
+    supabase
+      .from("campuses")
+      .select("*")
+      .order("name")
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("Failed to load campuses from database:", error);
+          return;
+        }
+        const hues = [C.gold, C.teal];
+        const live = data.map((row, i) => ({
+          id: row.slug,
+          name: row.name,
+          city: row.city,
+          country: row.country,
+          desc: row.description,
+          fellowCount: fellowsByCampus(row.slug).length,
+          hue: hues[i % hues.length],
+        }));
+        CAMPUSES.splice(0, CAMPUSES.length, ...live);
+        forceRerender((n) => n + 1);
+      });
+  }, []);
 
   const go = (v, id) => {
     setView(v);
