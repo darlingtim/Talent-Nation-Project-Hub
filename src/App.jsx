@@ -1282,6 +1282,37 @@ export default function App() {
       });
   }, []);
 
+  // Load real anchors (founder/co-founders) from Supabase and swap them
+  // into the ANCHORS array that the rest of the app already reads from.
+  useEffect(() => {
+    supabase
+      .from("anchors")
+      .select("*")
+      .eq("active", true)
+      .order("display_order")
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("Failed to load anchors from database:", error);
+          return;
+        }
+        const live = data.map((row) => ({
+          id: row.slug,
+          name: row.name,
+          role: row.role,
+          tag: row.tag,
+          photo: row.photo_url,
+          shortBio: row.short_bio,
+          background: row.background,
+          expertise: row.expertise || [],
+          contribution: row.contribution,
+          vision: row.vision,
+          linkedin: row.linkedin_url,
+        }));
+        ANCHORS.splice(0, ANCHORS.length, ...live);
+        forceRerender((n) => n + 1);
+      });
+  }, []);
+
   const go = (v, id) => {
     setView(v);
     if (id) setSelectedId(id);
