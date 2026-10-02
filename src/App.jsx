@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useState, useMemo } from "react";
 import {
   Search, Menu, X, ChevronRight, ChevronDown, Heart, Bookmark, Share2, Code2,
@@ -8,6 +9,7 @@ import {
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
 } from "recharts";
+import { supabase } from "./supabaseClient";
 
 /* ---------------------------------- tokens --------------------------------- */
 
@@ -1246,6 +1248,7 @@ function SubmitProjectPage({ go }) {
 /* ------------------------------------- app -------------------------------------- */
 
 export default function App() {
+  useEffect(() => { supabase.from("campuses").select("*").then(({ data, error }) => { if (error) console.error("Supabase error:", error); else console.log("Campuses from database:", data); }); }, []);
   const [view, setView] = useState("home");
   const [selectedId, setSelectedId] = useState(null);
   const [role, setRole] = useState("visitor");
