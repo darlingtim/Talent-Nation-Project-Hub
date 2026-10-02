@@ -310,7 +310,7 @@ function ProjectCard({ project, onOpen, liked, bookmarked, onLike, onBookmark, b
 
 /* ---------------------------------- navbar ---------------------------------- */
 
-function NavBar({ view, go, role, setRole, mobileOpen, setMobileOpen }) {
+function NavBar({ view, go, role, displayName, onLogout, mobileOpen, setMobileOpen }) {
   const links = [
     ["home", "Home"],
     ["explore", "Explore projects"],
@@ -364,21 +364,11 @@ function NavBar({ view, go, role, setRole, mobileOpen, setMobileOpen }) {
                 style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center" }}
                 aria-label="Open dashboard"
               >
-                <Avatar name={role === "admin" ? "Admin User" : "Amaka Obi"} size={34} hue={C.teal} />
+                <Avatar name={displayName || "Fellow"} size={34} hue={C.teal} />
               </button>
+              <GhostButton small onClick={onLogout}>Log out</GhostButton>
             </>
           )}
-          <select
-            value={role}
-            onChange={(e) => { setRole(e.target.value); go(e.target.value === "admin" ? "admin" : e.target.value === "fellow" ? "dashboard" : "home"); }}
-            className="tn-body"
-            style={{ fontSize: 11.5, border: `1px solid ${C.line}`, borderRadius: 8, padding: "6px 6px", color: C.slateLight, background: C.paper }}
-            aria-label="Preview role"
-          >
-            <option value="visitor">Preview: visitor</option>
-            <option value="fellow">Preview: fellow</option>
-            <option value="admin">Preview: admin</option>
-          </select>
         </div>
 
         <button
@@ -402,8 +392,17 @@ function NavBar({ view, go, role, setRole, mobileOpen, setMobileOpen }) {
             </button>
           ))}
           <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-            <GhostButton small onClick={() => { go("login"); setMobileOpen(false); }}>Log in</GhostButton>
-            <PrimaryButton small onClick={() => { go("signup"); setMobileOpen(false); }}>Sign up</PrimaryButton>
+            {role === "visitor" ? (
+              <>
+                <GhostButton small onClick={() => { go("login"); setMobileOpen(false); }}>Log in</GhostButton>
+                <PrimaryButton small onClick={() => { go("signup"); setMobileOpen(false); }}>Sign up</PrimaryButton>
+              </>
+            ) : (
+              <>
+                <PrimaryButton small onClick={() => { go("submit"); setMobileOpen(false); }}>Submit a project</PrimaryButton>
+                <GhostButton small onClick={() => { onLogout(); setMobileOpen(false); }}>Log out</GhostButton>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -1015,56 +1014,149 @@ function AboutPage({ go }) {
 
 /* --------------------------------- auth pages ----------------------------------- */
 
-function AuthPage({ mode, go, setRole }) {
+function AuthPage({ mode, go }) {
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setNotice("");
+    setLoading(true);
+
+    if (mode === "signup") {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { full_name: fullName } },
+      });
+      setLoading(false);
+      if (error) {
+        setError(error.message);
+        return;
+      }
+      if (data.session) {
+        // Logged in immediately (email confirmation is off).
+        go("dashboard");
+      } else {
+        // Supabase sent a confirmation email; no session yet.
+        setNotice("Account created. Check your email to confirm it, then log in.");
+      }
+    } else {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      setLoading(false);
+      if (error) {
+        setError(error.message);
+        return;
+      }
+      go("dashboard");
+    }
+  };
+
   return (
     <div style={{ maxWidth: 420, margin: "0 auto", padding: "80px 24px 96px" }}>
       <h1 className="tn-display" style={{ fontSize: 26, fontWeight: 700, textAlign: "center", margin: "0 0 8px" }}>
         {mode === "login" ? "Log in to your account" : "Create your fellow account"}
       </h1>
       <p className="tn-body" style={{ fontSize: 13.5, color: C.slateLight, textAlign: "center", margin: "0 0 32px" }}>
-        This is a prototype — no real accounts are created.
+        {mode === "login" ? "Welcome back." : "Join the Talent Nation Project Hub."}
       </p>
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {mode === "signup" && (
-          <input placeholder="Full name" className="tn-body" style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${C.line}`, fontSize: 14 }} />
+          <input
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            placeholder="Full name"
+            required
+            className="tn-body"
+            style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${C.line}`, fontSize: 14 }}
+          />
         )}
-        <input placeholder="Email address" className="tn-body" style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${C.line}`, fontSize: 14 }} />
-        <input placeholder="Password" type="password" className="tn-body" style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${C.line}`, fontSize: 14 }} />
-        <PrimaryButton style={{ justifyContent: "center", marginTop: 8 }} onClick={() => { setRole("fellow"); go("dashboard"); }}>
-          {mode === "login" ? "Log in" : "Create account"}
+        <input
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Email address"
+          type="email"
+          required
+          className="tn-body"
+          style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${C.line}`, fontSize: 14 }}
+        />
+        <input
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Password"
+          type="password"
+          required
+          minLength={6}
+          className="tn-body"
+          style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${C.line}`, fontSize: 14 }}
+        />
+        {error && (
+          <p className="tn-body" style={{ fontSize: 13, color: C.danger, margin: 0 }}>{error}</p>
+        )}
+        {notice && (
+          <p className="tn-body" style={{ fontSize: 13, color: C.tealDeep, margin: 0 }}>{notice}</p>
+        )}
+        <PrimaryButton style={{ justifyContent: "center", marginTop: 8 }} disabled={loading}>
+          {loading ? "Please wait…" : mode === "login" ? "Log in" : "Create account"}
         </PrimaryButton>
         <p className="tn-body" style={{ fontSize: 13, color: C.slateLight, textAlign: "center", margin: "8px 0 0" }}>
           {mode === "login" ? "New to Talent Nation? " : "Already a fellow? "}
-          <button onClick={() => go(mode === "login" ? "signup" : "login")} style={{ background: "none", border: "none", color: C.teal, fontWeight: 600, cursor: "pointer", fontSize: 13 }}>
+          <button type="button" onClick={() => go(mode === "login" ? "signup" : "login")} style={{ background: "none", border: "none", color: C.teal, fontWeight: 600, cursor: "pointer", fontSize: 13 }}>
             {mode === "login" ? "Sign up" : "Log in"}
           </button>
         </p>
-      </div>
+      </form>
     </div>
   );
 }
 
 /* -------------------------------- fellow dashboard ------------------------------- */
 
-function FellowDashboard({ go, openProject }) {
-  const me = FELLOWS[0];
-  const myProjects = projectsByFellow(me.id);
-  const totalViews = myProjects.reduce((s, p) => s + p.views, 0);
-  const totalLikes = myProjects.reduce((s, p) => s + p.likes, 0);
+function FellowDashboard({ go, openProject, session, profile }) {
+  const [myProjects, setMyProjects] = useState([]);
+  const [loadingProjects, setLoadingProjects] = useState(true);
+
+  // Load this fellow's real submitted projects (there's no "submit a
+  // project" form wired up yet, so this will show 0 until that's built).
+  useEffect(() => {
+    if (!session) return;
+    supabase
+      .from("projects")
+      .select("*")
+      .eq("created_by", session.user.id)
+      .then(({ data, error }) => {
+        setLoadingProjects(false);
+        if (error) {
+          console.error("Failed to load your projects:", error);
+          return;
+        }
+        setMyProjects(data || []);
+      });
+  }, [session]);
+
+  const displayName = profile?.full_name || session?.user?.email || "Fellow";
+  const firstName = displayName.split(" ")[0].split("@")[0];
+  const totalViews = myProjects.reduce((s, p) => s + (p.views || 0), 0);
   const stats = [
     ["Total projects", myProjects.length, FolderKanban],
     ["Project views", totalViews.toLocaleString(), Eye],
-    ["Likes", totalLikes, Heart],
-    ["Profile views", 842, Users],
+    ["Likes", 0, Heart],
+    ["Profile views", 0, Users],
   ];
+
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 24px 96px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 32, flexWrap: "wrap", gap: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <Avatar name={me.name} size={54} hue={C.teal} />
+          <Avatar name={displayName} size={54} hue={C.teal} />
           <div>
-            <p className="tn-display" style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Welcome back, {me.name.split(" ")[0]}</p>
-            <p className="tn-body" style={{ fontSize: 13, color: C.slateLight, margin: 0 }}>{me.title} · {getCampus(me.campusId).name}</p>
+            <p className="tn-display" style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Welcome back, {firstName}</p>
+            <p className="tn-body" style={{ fontSize: 13, color: C.slateLight, margin: 0 }}>{profile?.title || "Fellow"}{profile?.campus_id ? "" : " · No campus set yet"}</p>
           </div>
         </div>
         <PrimaryButton onClick={() => go("submit")}><Plus size={15} /> Submit a project</PrimaryButton>
@@ -1083,22 +1175,33 @@ function FellowDashboard({ go, openProject }) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <p className="tn-display" style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>Your projects</p>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {myProjects.map((p) => (
-          <div key={p.id} style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 16, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-            <div style={{ cursor: "pointer" }} onClick={() => openProject(p.id)}>
-              <p className="tn-display" style={{ fontWeight: 700, fontSize: 14.5, margin: "0 0 3px" }}>{p.title}</p>
-              <p className="tn-body" style={{ fontSize: 12.5, color: C.slateLight, margin: 0, display: "flex", alignItems: "center", gap: 6 }}>
-                <StatusDot status={p.status} /> {p.status} · {p.views.toLocaleString()} views · {p.likes} likes
-              </p>
+      {loadingProjects ? (
+        <p className="tn-body" style={{ fontSize: 13.5, color: C.slateLight }}>Loading…</p>
+      ) : myProjects.length === 0 ? (
+        <div style={{ border: `1px dashed ${C.line}`, borderRadius: 14, padding: 32, textAlign: "center" }}>
+          <p className="tn-body" style={{ fontSize: 13.5, color: C.slateLight, margin: "0 0 14px" }}>
+            You haven't submitted a project yet.
+          </p>
+          <GhostButton small onClick={() => go("submit")}><Plus size={13} /> Submit your first project</GhostButton>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {myProjects.map((p) => (
+            <div key={p.id} style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 16, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+              <div style={{ cursor: "pointer" }} onClick={() => openProject(p.id)}>
+                <p className="tn-display" style={{ fontWeight: 700, fontSize: 14.5, margin: "0 0 3px" }}>{p.title}</p>
+                <p className="tn-body" style={{ fontSize: 12.5, color: C.slateLight, margin: 0, display: "flex", alignItems: "center", gap: 6 }}>
+                  <StatusDot status={p.status} /> {p.status} · {(p.views || 0).toLocaleString()} views
+                </p>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <GhostButton small><Pencil size={13} /> Edit</GhostButton>
+                <GhostButton small style={{ color: C.danger, borderColor: "#F0D3D3" }}><Trash2 size={13} /></GhostButton>
+              </div>
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <GhostButton small><Pencil size={13} /> Edit</GhostButton>
-              <GhostButton small style={{ color: C.danger, borderColor: "#F0D3D3" }}><Trash2 size={13} /></GhostButton>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1175,7 +1278,7 @@ function AdminDashboard() {
               <div>
                 <p className="tn-display" style={{ fontWeight: 700, fontSize: 14.5, margin: "0 0 3px" }}>{p.title}</p>
                 <p className="tn-body" style={{ fontSize: 12.5, color: C.slateLight, margin: 0 }}>
-                  Submitted by {p.fellowIds.map(fellowName).join(", ")} · {getCampus(p.campusId).name}
+                  Submitted by {p.fellowIds.map(fellowName).join(", ")} · {getCampus(p.campusId)?.name || "Campus"}
                 </p>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
@@ -1249,11 +1352,58 @@ function SubmitProjectPage({ go }) {
 export default function App() {
   const [view, setView] = useState("home");
   const [selectedId, setSelectedId] = useState(null);
-  const [role, setRole] = useState("visitor");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [liked, setLiked] = useState(new Set());
   const [bookmarked, setBookmarked] = useState(new Set());
   const [, forceRerender] = useState(0);
+
+  // session = the logged-in Supabase Auth user (null when logged out).
+  // profile = that user's row in our own "profiles" table (name, role, etc.).
+  const [session, setSession] = useState(null);
+  const [profile, setProfile] = useState(null);
+
+  // On first load, check if there's already a logged-in session (e.g. the
+  // person refreshed the page). Then keep listening for login/logout events.
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+    });
+
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  // Whenever the session changes, load (or clear) the matching profile row.
+  useEffect(() => {
+    if (!session) {
+      setProfile(null);
+      return;
+    }
+    supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", session.user.id)
+      .single()
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("Failed to load profile:", error);
+          return;
+        }
+        setProfile(data);
+      });
+  }, [session]);
+
+  const role = !session ? "visitor" : (profile?.role === "administrator" || profile?.role === "super_administrator") ? "admin" : "fellow";
+  const displayName = profile?.full_name || session?.user?.email;
+  const handleLogout = () => supabase.auth.signOut();
+
+  // If someone logs out while on a fellow/admin-only page, send them home.
+  useEffect(() => {
+    if (role === "visitor" && ["dashboard", "admin", "submit"].includes(view)) {
+      setView("home");
+    }
+  }, [role, view]);
 
   // Load real campuses from Supabase and swap them into the CAMPUSES array
   // that the rest of the app already reads from.
@@ -1339,7 +1489,7 @@ export default function App() {
   return (
     <div className="tn-body" style={{ background: C.paper, minHeight: "100vh" }}>
       <style>{FONTS}</style>
-      <NavBar view={view} go={go} role={role} setRole={setRole} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
+      <NavBar view={view} go={go} role={role} displayName={displayName} onLogout={handleLogout} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
 
       {view === "home" && <HomePage go={go} openProject={openProject} liked={liked} bookmarked={bookmarked} onLike={onLike} onBookmark={onBookmark} />}
       {view === "explore" && <ExplorePage go={go} openProject={openProject} liked={liked} bookmarked={bookmarked} onLike={onLike} onBookmark={onBookmark} />}
@@ -1351,9 +1501,9 @@ export default function App() {
       {view === "anchors" && <AnchorsPage go={go} openAnchor={openAnchor} />}
       {view === "anchor" && <AnchorDetailPage anchor={anchor} go={go} />}
       {view === "about" && <AboutPage go={go} />}
-      {view === "login" && <AuthPage mode="login" go={go} setRole={setRole} />}
-      {view === "signup" && <AuthPage mode="signup" go={go} setRole={setRole} />}
-      {view === "dashboard" && <FellowDashboard go={go} openProject={openProject} />}
+      {view === "login" && <AuthPage mode="login" go={go} />}
+      {view === "signup" && <AuthPage mode="signup" go={go} />}
+      {view === "dashboard" && <FellowDashboard go={go} openProject={openProject} session={session} profile={profile} />}
       {view === "admin" && <AdminDashboard />}
       {view === "submit" && <SubmitProjectPage go={go} />}
 
