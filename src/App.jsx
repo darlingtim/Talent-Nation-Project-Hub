@@ -725,11 +725,16 @@ function ProjectDetailPage({ project, go, openFellow, liked, bookmarked, onLike,
 
           <div style={{ border: `1px solid ${C.line}`, borderRadius: 16, padding: 20, marginBottom: 16 }}>
             <p className="tn-display" style={{ fontSize: 13.5, fontWeight: 700, margin: "0 0 12px" }}>Links</p>
-            {[["Github repository", Code2], ["Live demo", Globe], ["Project website", ExternalLinkIcon]].map(([label, Icon], i) => (
-              <a key={i} href={project.github} className="tn-body" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.teal, textDecoration: "none", padding: "8px 0", borderTop: i > 0 ? `1px solid ${C.line}` : "none" }}>
-                <Icon size={14} /> {label}
-              </a>
-            ))}
+            {[["Github repository", Code2, project.github], ["Live demo", Globe, project.demo]]
+              .filter(([, , url]) => url && url !== "#")
+              .map(([label, Icon, url], i) => (
+                <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="tn-body" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.teal, textDecoration: "none", padding: "8px 0", borderTop: i > 0 ? `1px solid ${C.line}` : "none" }}>
+                  <Icon size={14} /> {label}
+                </a>
+              ))}
+            {(!project.github || project.github === "#") && (!project.demo || project.demo === "#") && (
+              <p className="tn-body" style={{ fontSize: 13, color: C.slate, margin: 0 }}>No links added yet.</p>
+            )}
           </div>
 
           <div style={{ border: `1px solid ${C.line}`, borderRadius: 16, padding: 20 }}>
