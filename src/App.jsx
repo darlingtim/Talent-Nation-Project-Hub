@@ -185,16 +185,18 @@ function StatusDot({ status }) {
   return <span style={{ width: 7, height: 7, borderRadius: "50%", background: colors[status], display: "inline-block" }} />;
 }
 
-function PrimaryButton({ children, onClick, style, small }) {
+function PrimaryButton({ children, onClick, style, small, disabled }) {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       className="tn-body"
       style={{
         background: C.gold, color: C.ink, border: "none", borderRadius: 10,
         padding: small ? "8px 16px" : "12px 22px", fontWeight: 700,
-        fontSize: small ? 13 : 14, cursor: "pointer", display: "inline-flex",
+        fontSize: small ? 13 : 14, cursor: disabled ? "not-allowed" : "pointer", display: "inline-flex",
         alignItems: "center", gap: 8, transition: "transform 0.15s ease",
+        opacity: disabled ? 0.6 : 1,
         ...style,
       }}
       onMouseDown={(e) => (e.currentTarget.style.transform = "scale(0.97)")}
@@ -259,7 +261,9 @@ function ProjectCard({ project, onOpen, liked, bookmarked, onLike, onBookmark, b
         onClick={() => onOpen(project.id)}
         style={{
           height: big ? 200 : 130, cursor: "pointer",
-          background: `linear-gradient(135deg, ${C.ink} 0%, ${C.inkSoft} 100%)`,
+          background: project.cover
+            ? `linear-gradient(to top, rgba(18,20,31,0.75), rgba(18,20,31,0.15)), url(${project.cover}) center/cover`
+            : `linear-gradient(135deg, ${C.ink} 0%, ${C.inkSoft} 100%)`,
           position: "relative", display: "flex", alignItems: "flex-end", padding: 16,
         }}
       >
@@ -448,9 +452,11 @@ function Footer({ go }) {
 
 /* ---------------------------------- home page --------------------------------- */
 
-function HomePage({ go, openProject, liked, bookmarked, onLike, onBookmark }) {
+function HomePage({ go, openProject, liked, bookmarked, onLike, onBookmark, recentProjects }) {
   const totalFellows = CAMPUSES.reduce((s, c) => s + c.fellowCount, 0);
-  const featured = PROJECTS.filter((p) => p.featured);
+  // Show real fellow-submitted projects (most recent first) once any exist;
+  // fall back to the curated mock "featured" set until then.
+  const featured = recentProjects && recentProjects.length > 0 ? recentProjects : PROJECTS.filter((p) => p.featured);
   const stats = [
     { label: "Fellows", value: `${totalFellows.toLocaleString()}+`, icon: Users },
     { label: "Projects", value: `${PROJECTS.length}+`, icon: FolderKanban },
@@ -497,17 +503,23 @@ function HomePage({ go, openProject, liked, bookmarked, onLike, onBookmark }) {
 
       <div style={{ maxWidth: 1180, margin: "0 auto", padding: "72px 24px 0" }}>
         <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
-          <SectionHeading eyebrow="Spotlight" title="Featured projects" sub="A rotating selection of standout work, chosen by the Talent Nation team." />
+          <SectionHeading
+            eyebrow="Spotlight"
+            title={recentProjects && recentProjects.length > 0 ? "Recently submitted projects" : "Featured projects"}
+            sub={recentProjects && recentProjects.length > 0 ? "The latest projects submitted by Talent Nation fellows." : "A rotating selection of standout work, chosen by the Talent Nation team."}
+          />
           <GhostButton small onClick={() => go("explore")}>View all projects <ChevronRight size={14} /></GhostButton>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr", gap: 20, gridTemplateRows: "auto auto" }}>
-          <div style={{ gridRow: "span 2" }}>
-            <ProjectCard project={featured[0]} onOpen={openProject} liked={liked.has(featured[0].id)} bookmarked={bookmarked.has(featured[0].id)} onLike={onLike} onBookmark={onBookmark} big />
+        {featured.length > 0 && (
+          <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr", gap: 20, gridTemplateRows: "auto auto" }}>
+            <div style={{ gridRow: "span 2" }}>
+              <ProjectCard project={featured[0]} onOpen={openProject} liked={liked.has(featured[0].id)} bookmarked={bookmarked.has(featured[0].id)} onLike={onLike} onBookmark={onBookmark} big />
+            </div>
+            {featured.slice(1, 5).map((p) => (
+              <ProjectCard key={p.id} project={p} onOpen={openProject} liked={liked.has(p.id)} bookmarked={bookmarked.has(p.id)} onLike={onLike} onBookmark={onBookmark} />
+            ))}
           </div>
-          {featured.slice(1, 5).map((p) => (
-            <ProjectCard key={p.id} project={p} onOpen={openProject} liked={liked.has(p.id)} bookmarked={bookmarked.has(p.id)} onLike={onLike} onBookmark={onBookmark} />
-          ))}
-        </div>
+        )}
       </div>
 
       <div style={{ maxWidth: 1180, margin: "0 auto", padding: "80px 24px 0" }}>
@@ -649,7 +661,13 @@ function ProjectDetailPage({ project, go, openFellow, liked, bookmarked, onLike,
     <div style={{ maxWidth: 1000, margin: "0 auto", padding: "40px 24px 96px" }}>
       <GhostButton small onClick={() => go("explore")} style={{ marginBottom: 24 }}><ArrowLeft size={14} /> Back to projects</GhostButton>
 
-      <div style={{ borderRadius: 20, background: `linear-gradient(135deg, ${C.ink}, ${C.inkSoft})`, padding: 40, marginBottom: 32 }}>
+      <div style={{
+        borderRadius: 20,
+        background: project.cover
+          ? `linear-gradient(to top, rgba(18,20,31,0.9), rgba(18,20,31,0.55)), url(${project.cover}) center/cover`
+          : `linear-gradient(135deg, ${C.ink}, ${C.inkSoft})`,
+        padding: 40, marginBottom: 32,
+      }}>
         <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
           <Badge tone="gold">{project.category}</Badge>
           <Badge tone="ink" style={{ border: "1px solid rgba(255,255,255,0.25)" }}><StatusDot status={project.status} /> {project.status}</Badge>
@@ -1299,50 +1317,172 @@ function AdminDashboard() {
 
 /* ---------------------------------- submit page --------------------------------- */
 
-function SubmitProjectPage({ go }) {
-  const [step, setStep] = useState(1);
-  const steps = ["Basic info", "Details", "Tech & skills", "Media", "Links", "Team", "Preview"];
+const inputStyle = { padding: "12px 14px", borderRadius: 10, border: `1px solid ${C.line}`, fontSize: 14, width: "100%", boxSizing: "border-box" };
+
+function Field({ label, children }) {
+  return (
+    <div>
+      <p className="tn-body" style={{ fontSize: 13, fontWeight: 600, color: C.ink, margin: "0 0 6px" }}>{label}</p>
+      {children}
+    </div>
+  );
+}
+
+function SubmitProjectPage({ go, session }) {
+  const [title, setTitle] = useState("");
+  const [shortDesc, setShortDesc] = useState("");
+  const [fullDesc, setFullDesc] = useState("");
+  const [problem, setProblem] = useState("");
+  const [solution, setSolution] = useState("");
+  const [category, setCategory] = useState("");
+  const [campusSlug, setCampusSlug] = useState("");
+  const [status, setStatus] = useState("Ongoing");
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [techText, setTechText] = useState("");
+  const [githubUrl, setGithubUrl] = useState("");
+  const [demoUrl, setDemoUrl] = useState("");
+  const [coverFile, setCoverFile] = useState(null);
+  const [coverPreview, setCoverPreview] = useState(null);
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleCoverChange = (e) => {
+    const file = e.target.files[0];
+    setCoverFile(file || null);
+    setCoverPreview(file ? URL.createObjectURL(file) : null);
+  };
+
+  const slugify = (s) =>
+    s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") + "-" + Date.now().toString(36);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    if (!title || !shortDesc || !category || !campusSlug) {
+      setError("Please fill in the project title, short description, category, and campus.");
+      return;
+    }
+    const campus = CAMPUSES.find((c) => c.id === campusSlug);
+    if (!campus?.dbId) {
+      setError("That campus isn't available right now — try refreshing the page.");
+      return;
+    }
+
+    setSubmitting(true);
+
+    // If a cover photo was picked, upload it to Storage first and get back
+    // a public URL to save alongside the project.
+    let coverImageUrl = null;
+    if (coverFile) {
+      const fileExt = coverFile.name.split(".").pop();
+      const fileName = `${session.user.id}-${Date.now()}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage.from("project_image").upload(fileName, coverFile);
+      if (uploadError) {
+        setSubmitting(false);
+        setError(`Image upload failed: ${uploadError.message}`);
+        return;
+      }
+      const { data: urlData } = supabase.storage.from("project_image").getPublicUrl(fileName);
+      coverImageUrl = urlData.publicUrl;
+    }
+
+    const { error: insertError } = await supabase.from("projects").insert({
+      title,
+      slug: slugify(title),
+      short_description: shortDesc,
+      full_description: fullDesc,
+      problem_statement: problem,
+      solution,
+      category,
+      campus_id: campus.dbId,
+      status,
+      year: Number(year),
+      technologies: techText.split(",").map((t) => t.trim()).filter(Boolean),
+      github_url: githubUrl || null,
+      demo_url: demoUrl || null,
+      cover_image_url: coverImageUrl,
+      created_by: session.user.id,
+    });
+    setSubmitting(false);
+
+    if (insertError) {
+      setError(insertError.message);
+      return;
+    }
+    go("dashboard");
+  };
+
   return (
     <div style={{ maxWidth: 700, margin: "0 auto", padding: "40px 24px 96px" }}>
-      <SectionHeading eyebrow="New submission" title="Submit a project" sub="A quick preview of the multi-step submission flow." />
-      <div style={{ display: "flex", gap: 6, marginBottom: 32, flexWrap: "wrap" }}>
-        {steps.map((s, i) => (
-          <div key={s} onClick={() => setStep(i + 1)} style={{ cursor: "pointer", padding: "6px 12px", borderRadius: 999, fontSize: 12, fontWeight: 600, background: step === i + 1 ? C.ink : C.paperDeep, color: step === i + 1 ? C.white : C.slate }} className="tn-body">
-            {i + 1}. {s}
-          </div>
-        ))}
-      </div>
-      <div style={{ border: `1px solid ${C.line}`, borderRadius: 16, padding: 28 }}>
-        {step === 1 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <input placeholder="Project title" className="tn-body" style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${C.line}`, fontSize: 14 }} />
-            <input placeholder="Short description" className="tn-body" style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${C.line}`, fontSize: 14 }} />
-            <textarea placeholder="Full project description" rows={4} className="tn-body" style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${C.line}`, fontSize: 14, resize: "vertical" }} />
-            <select className="tn-body" style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${C.line}`, fontSize: 14 }}>
-              <option>Select a category</option>
+      <SectionHeading eyebrow="New submission" title="Submit a project" sub="Add your project to the Project Hub. An admin will review it before it's featured publicly." />
+      <form onSubmit={handleSubmit} style={{ border: `1px solid ${C.line}`, borderRadius: 16, padding: 28, display: "flex", flexDirection: "column", gap: 18 }}>
+        <Field label="Project title *">
+          <input value={title} onChange={(e) => setTitle(e.target.value)} className="tn-body" style={inputStyle} />
+        </Field>
+        <Field label="Short description *">
+          <input value={shortDesc} onChange={(e) => setShortDesc(e.target.value)} placeholder="One or two sentences" className="tn-body" style={inputStyle} />
+        </Field>
+        <Field label="Full description">
+          <textarea value={fullDesc} onChange={(e) => setFullDesc(e.target.value)} rows={4} className="tn-body" style={{ ...inputStyle, resize: "vertical" }} />
+        </Field>
+        <Field label="Problem statement">
+          <textarea value={problem} onChange={(e) => setProblem(e.target.value)} rows={2} className="tn-body" style={{ ...inputStyle, resize: "vertical" }} />
+        </Field>
+        <Field label="Proposed solution">
+          <textarea value={solution} onChange={(e) => setSolution(e.target.value)} rows={2} className="tn-body" style={{ ...inputStyle, resize: "vertical" }} />
+        </Field>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <Field label="Category *">
+            <select value={category} onChange={(e) => setCategory(e.target.value)} className="tn-body" style={inputStyle}>
+              <option value="">Select a category</option>
               {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
             </select>
-          </div>
-        )}
-        {step > 1 && step < 7 && (
-          <p className="tn-body" style={{ color: C.slateLight, fontSize: 14, textAlign: "center", padding: "40px 0" }}>
-            {steps[step - 1]} form fields go here in the full build.
-          </p>
-        )}
-        {step === 7 && (
-          <p className="tn-body" style={{ color: C.slate, fontSize: 14, textAlign: "center", padding: "40px 0" }}>
-            Your project preview would appear here before final submission for admin review.
-          </p>
-        )}
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24 }}>
-          <GhostButton small onClick={() => setStep((s) => Math.max(1, s - 1))} style={{ visibility: step === 1 ? "hidden" : "visible" }}>Back</GhostButton>
-          {step < 7 ? (
-            <PrimaryButton small onClick={() => setStep((s) => Math.min(7, s + 1))}>Continue</PrimaryButton>
-          ) : (
-            <PrimaryButton small onClick={() => go("dashboard")}>Submit for review</PrimaryButton>
-          )}
+          </Field>
+          <Field label="Campus *">
+            <select value={campusSlug} onChange={(e) => setCampusSlug(e.target.value)} className="tn-body" style={inputStyle}>
+              <option value="">Select a campus</option>
+              {CAMPUSES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Status">
+            <select value={status} onChange={(e) => setStatus(e.target.value)} className="tn-body" style={inputStyle}>
+              {STATUSES.map((s) => <option key={s}>{s}</option>)}
+            </select>
+          </Field>
+          <Field label="Year">
+            <input type="number" value={year} onChange={(e) => setYear(e.target.value)} className="tn-body" style={inputStyle} />
+          </Field>
         </div>
-      </div>
+
+        <Field label="Project picture">
+          <input type="file" accept="image/*" onChange={handleCoverChange} className="tn-body" style={{ fontSize: 13.5 }} />
+          {coverPreview && (
+            <img src={coverPreview} alt="Preview" style={{ marginTop: 10, width: "100%", maxHeight: 180, objectFit: "cover", borderRadius: 10, border: `1px solid ${C.line}` }} />
+          )}
+        </Field>
+
+        <Field label="Technologies (comma-separated)">
+          <input value={techText} onChange={(e) => setTechText(e.target.value)} placeholder="React, Node.js, PostgreSQL" className="tn-body" style={inputStyle} />
+        </Field>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <Field label="GitHub link">
+            <input value={githubUrl} onChange={(e) => setGithubUrl(e.target.value)} placeholder="https://github.com/…" className="tn-body" style={inputStyle} />
+          </Field>
+          <Field label="Live demo link">
+            <input value={demoUrl} onChange={(e) => setDemoUrl(e.target.value)} placeholder="https://…" className="tn-body" style={inputStyle} />
+          </Field>
+        </div>
+
+        {error && <p className="tn-body" style={{ fontSize: 13, color: C.danger, margin: 0 }}>{error}</p>}
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
+          <GhostButton small onClick={() => go("dashboard")}>Cancel</GhostButton>
+          <PrimaryButton small disabled={submitting}>{submitting ? "Submitting…" : "Submit project"}</PrimaryButton>
+        </div>
+      </form>
     </div>
   );
 }
@@ -1420,6 +1560,7 @@ export default function App() {
         const hues = [C.gold, C.teal];
         const live = data.map((row, i) => ({
           id: row.slug,
+          dbId: row.id,
           name: row.name,
           city: row.city,
           country: row.country,
@@ -1463,6 +1604,49 @@ export default function App() {
       });
   }, []);
 
+  // Load the most recently submitted real projects, for the home page
+  // Spotlight section. Visitors who aren't logged in only ever see approved
+  // ones here (the database enforces that, not this code).
+  const [recentProjects, setRecentProjects] = useState([]);
+  useEffect(() => {
+    supabase
+      .from("projects")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(6)
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("Failed to load recent projects:", error);
+          return;
+        }
+        const mapped = (data || []).map((row) => {
+          const campus = CAMPUSES.find((c) => c.dbId === row.campus_id);
+          return {
+            id: row.id,
+            title: row.title,
+            campusId: campus?.id || null,
+            fellowIds: [],
+            category: row.category || "",
+            technologies: row.technologies || [],
+            status: row.status || "Ongoing",
+            year: row.year || new Date().getFullYear(),
+            views: row.views || 0,
+            likes: 0,
+            shortDesc: row.short_description || "",
+            problem: row.problem_statement || "",
+            solution: row.solution || "",
+            objectives: row.objectives || "",
+            audience: row.target_audience || "",
+            challenges: "", results: "", impact: "", future: "",
+            github: row.github_url || "#",
+            demo: row.demo_url || "#",
+            cover: row.cover_image_url || null,
+          };
+        });
+        setRecentProjects(mapped);
+      });
+  }, []);
+
   const go = (v, id) => {
     setView(v);
     if (id) setSelectedId(id);
@@ -1481,7 +1665,7 @@ export default function App() {
   const onLike = toggleSet(setLiked);
   const onBookmark = toggleSet(setBookmarked);
 
-  const project = PROJECTS.find((p) => p.id === selectedId);
+  const project = PROJECTS.find((p) => p.id === selectedId) || recentProjects.find((p) => p.id === selectedId);
   const fellow = FELLOWS.find((f) => f.id === selectedId);
   const campus = getCampus(selectedId);
   const anchor = ANCHORS.find((a) => a.id === selectedId);
@@ -1491,7 +1675,7 @@ export default function App() {
       <style>{FONTS}</style>
       <NavBar view={view} go={go} role={role} displayName={displayName} onLogout={handleLogout} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
 
-      {view === "home" && <HomePage go={go} openProject={openProject} liked={liked} bookmarked={bookmarked} onLike={onLike} onBookmark={onBookmark} />}
+      {view === "home" && <HomePage go={go} openProject={openProject} liked={liked} bookmarked={bookmarked} onLike={onLike} onBookmark={onBookmark} recentProjects={recentProjects} />}
       {view === "explore" && <ExplorePage go={go} openProject={openProject} liked={liked} bookmarked={bookmarked} onLike={onLike} onBookmark={onBookmark} />}
       {view === "project" && <ProjectDetailPage project={project} go={go} openFellow={openFellow} liked={liked} bookmarked={bookmarked} onLike={onLike} onBookmark={onBookmark} />}
       {view === "fellows" && <FellowsPage go={go} openFellow={openFellow} />}
@@ -1505,7 +1689,7 @@ export default function App() {
       {view === "signup" && <AuthPage mode="signup" go={go} />}
       {view === "dashboard" && <FellowDashboard go={go} openProject={openProject} session={session} profile={profile} />}
       {view === "admin" && <AdminDashboard />}
-      {view === "submit" && <SubmitProjectPage go={go} />}
+      {view === "submit" && <SubmitProjectPage go={go} session={session} />}
 
       <Footer go={go} />
     </div>
