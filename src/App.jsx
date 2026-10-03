@@ -104,6 +104,7 @@ const projectsByFellow = (id) => PROJECTS.filter((p) => p.fellowIds.includes(id)
 const projectsByCampus = (id) => PROJECTS.filter((p) => p.campusId === id);
 const fellowsByCampus = (id) => FELLOWS.filter((f) => f.campusId === id);
 const getCampus = (id) => CAMPUSES.find((c) => c.id === id);
+const getCampusByDbId = (dbId) => CAMPUSES.find((c) => c.dbId === dbId);
 
 const ANCHORS = [
   {
@@ -207,17 +208,18 @@ function PrimaryButton({ children, onClick, style, small, disabled }) {
   );
 }
 
-function GhostButton({ children, onClick, style, small, dark }) {
+function GhostButton({ children, onClick, style, small, dark, disabled }) {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       className="tn-body"
       style={{
         background: "transparent", color: dark ? C.white : C.ink,
         border: `1.5px solid ${dark ? "rgba(255,255,255,0.35)" : C.line}`,
         borderRadius: 10, padding: small ? "8px 16px" : "12px 22px", fontWeight: 600,
-        fontSize: small ? 13 : 14, cursor: "pointer", display: "inline-flex",
-        alignItems: "center", gap: 8,
+        fontSize: small ? 13 : 14, cursor: disabled ? "not-allowed" : "pointer", display: "inline-flex",
+        alignItems: "center", gap: 8, opacity: disabled ? 0.6 : 1,
         ...style,
       }}
     >
@@ -752,13 +754,13 @@ function ExternalLinkIcon(props) { return <Globe {...props} />; }
 
 /* ----------------------------------- fellows ---------------------------------- */
 
-function FellowsPage({ go, openFellow }) {
+function FellowsPage({ go, openFellow, fellows, projectCounts, loadingFellows }) {
   const [query, setQuery] = useState("");
   const [campus, setCampus] = useState("All");
   const [skill, setSkill] = useState("All");
-  const allSkills = Array.from(new Set(FELLOWS.flatMap((f) => f.skills)));
+  const allSkills = Array.from(new Set(fellows.flatMap((f) => f.skills)));
 
-  const filtered = FELLOWS.filter((f) => {
+  const filtered = fellows.filter((f) => {
     const matchQuery = query.trim() === "" || f.name.toLowerCase().includes(query.toLowerCase());
     const matchCampus = campus === "All" || f.campusId === campus;
     const matchSkill = skill === "All" || f.skills.includes(skill);
@@ -784,70 +786,104 @@ function FellowsPage({ go, openFellow }) {
           {allSkills.map((s) => <option key={s}>{s}</option>)}
         </select>
       </div>
-      <p className="tn-body" style={{ fontSize: 13, color: C.slateLight, marginBottom: 20 }}>{filtered.length} fellow{filtered.length !== 1 ? "s" : ""} found</p>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
-        {filtered.map((f) => {
-          const campusObj = getCampus(f.campusId);
-          return (
-            <div key={f.id} onClick={() => openFellow(f.id)} style={{ cursor: "pointer", border: `1px solid ${C.line}`, borderRadius: 16, padding: 18, background: C.white }}>
-              <Avatar name={f.name} size={44} hue={campusObj.hue} />
-              <p className="tn-display" style={{ fontWeight: 700, fontSize: 14.5, margin: "12px 0 2px" }}>{f.name}</p>
-              <p className="tn-body" style={{ fontSize: 12.5, color: C.slateLight, margin: "0 0 10px" }}>{f.title}</p>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 12 }}>
-                {f.skills.slice(0, 2).map((s) => <Badge key={s}>{s}</Badge>)}
-              </div>
-              <p className="tn-body" style={{ fontSize: 12, color: C.slate, display: "flex", alignItems: "center", gap: 4, margin: 0 }}>
-                <MapPin size={11} /> {f.city} · {projectsByFellow(f.id).length} projects
-              </p>
-            </div>
-          );
-        })}
-      </div>
+      {loadingFellows ? (
+        <p className="tn-body" style={{ fontSize: 13.5, color: C.slateLight }}>Loading…</p>
+      ) : (
+        <>
+          <p className="tn-body" style={{ fontSize: 13, color: C.slateLight, marginBottom: 20 }}>{filtered.length} fellow{filtered.length !== 1 ? "s" : ""} found</p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+            {filtered.map((f) => {
+              const campusObj = getCampus(f.campusId);
+              return (
+                <div key={f.id} onClick={() => openFellow(f.id)} style={{ cursor: "pointer", border: `1px solid ${C.line}`, borderRadius: 16, padding: 18, background: C.white }}>
+                  <Avatar name={f.name} size={44} hue={campusObj?.hue || C.teal} />
+                  <p className="tn-display" style={{ fontWeight: 700, fontSize: 14.5, margin: "12px 0 2px" }}>{f.name}</p>
+                  <p className="tn-body" style={{ fontSize: 12.5, color: C.slateLight, margin: "0 0 10px" }}>{f.title}</p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 12 }}>
+                    {f.skills.slice(0, 2).map((s) => <Badge key={s}>{s}</Badge>)}
+                  </div>
+                  <p className="tn-body" style={{ fontSize: 12, color: C.slate, display: "flex", alignItems: "center", gap: 4, margin: 0 }}>
+                    <MapPin size={11} /> {f.city || campusObj?.city || "—"} · {projectCounts[f.id] || 0} projects
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
 function FellowProfilePage({ fellow, go, openProject }) {
+  const [projects, setProjects] = useState([]);
+  const [loadingProjects, setLoadingProjects] = useState(true);
+
+  useEffect(() => {
+    if (!fellow) return;
+    setLoadingProjects(true);
+    supabase
+      .from("projects")
+      .select("*")
+      .eq("created_by", fellow.id)
+      .then(({ data, error }) => {
+        setLoadingProjects(false);
+        if (error) {
+          console.error("Failed to load this fellow's projects:", error);
+          return;
+        }
+        setProjects(data || []);
+      });
+  }, [fellow?.id]);
+
   if (!fellow) return null;
   const campus = getCampus(fellow.campusId);
-  const projects = projectsByFellow(fellow.id);
+  const skills = fellow.skills || [];
+
   return (
     <div style={{ maxWidth: 1000, margin: "0 auto", padding: "40px 24px 96px" }}>
       <GhostButton small onClick={() => go("fellows")} style={{ marginBottom: 24 }}><ArrowLeft size={14} /> Back to fellows</GhostButton>
       <div style={{ display: "flex", gap: 24, marginBottom: 36, flexWrap: "wrap" }}>
-        <Avatar name={fellow.name} size={92} hue={campus.hue} />
+        <Avatar name={fellow.name} size={92} hue={campus?.hue || C.teal} />
         <div style={{ flex: 1, minWidth: 260 }}>
           <h1 className="tn-display" style={{ fontSize: 28, fontWeight: 700, margin: "0 0 4px" }}>{fellow.name}</h1>
           <p className="tn-body" style={{ fontSize: 15, color: C.teal, fontWeight: 600, margin: "0 0 10px" }}>{fellow.title}</p>
           <p className="tn-body" style={{ fontSize: 13.5, color: C.slate, display: "flex", alignItems: "center", gap: 6, margin: "0 0 14px" }}>
-            <MapPin size={13} /> {fellow.city} <span style={{ color: C.slateLight }}>·</span> {campus.name}
+            <MapPin size={13} /> {fellow.city || "—"} {campus && <><span style={{ color: C.slateLight }}>·</span> {campus.name}</>}
           </p>
           <div style={{ display: "flex", gap: 8 }}>
-            <GhostButton small><Link2 size={14} /> LinkedIn</GhostButton>
-            <GhostButton small><Code2 size={14} /> GitHub</GhostButton>
-            <GhostButton small><Mail size={14} /> Contact</GhostButton>
+            {fellow.linkedin && <GhostButton small onClick={() => window.open(fellow.linkedin, "_blank")}><Link2 size={14} /> LinkedIn</GhostButton>}
+            {fellow.github && <GhostButton small onClick={() => window.open(fellow.github, "_blank")}><Code2 size={14} /> GitHub</GhostButton>}
           </div>
         </div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 32 }}>
         <div>
           <p className="tn-display" style={{ fontSize: 15, fontWeight: 700, margin: "0 0 10px" }}>About</p>
-          <p className="tn-body" style={{ fontSize: 14, color: C.slate, lineHeight: 1.7, marginBottom: 32 }}>{fellow.bio}</p>
+          <p className="tn-body" style={{ fontSize: 14, color: C.slate, lineHeight: 1.7, marginBottom: 32 }}>{fellow.bio || "This fellow hasn't added a bio yet."}</p>
           <p className="tn-display" style={{ fontSize: 15, fontWeight: 700, margin: "0 0 16px" }}>Projects ({projects.length})</p>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-            {projects.map((p) => (
-              <div key={p.id} onClick={() => openProject(p.id)} style={{ cursor: "pointer", border: `1px solid ${C.line}`, borderRadius: 14, padding: 16 }}>
-                <p className="tn-display" style={{ fontWeight: 700, fontSize: 14, margin: "0 0 4px" }}>{p.title}</p>
-                <p className="tn-body" style={{ fontSize: 12.5, color: C.slateLight, margin: 0 }}>{p.category} · {p.status}</p>
-              </div>
-            ))}
-          </div>
+          {loadingProjects ? (
+            <p className="tn-body" style={{ fontSize: 13.5, color: C.slateLight }}>Loading…</p>
+          ) : projects.length === 0 ? (
+            <p className="tn-body" style={{ fontSize: 13.5, color: C.slateLight }}>No projects submitted yet.</p>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              {projects.map((p) => (
+                <div key={p.id} onClick={() => openProject(p.id)} style={{ cursor: "pointer", border: `1px solid ${C.line}`, borderRadius: 14, padding: 16 }}>
+                  <p className="tn-display" style={{ fontWeight: 700, fontSize: 14, margin: "0 0 4px" }}>{p.title}</p>
+                  <p className="tn-body" style={{ fontSize: 12.5, color: C.slateLight, margin: 0 }}>{p.category} · {p.status}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         <div>
           <div style={{ border: `1px solid ${C.line}`, borderRadius: 16, padding: 20 }}>
             <p className="tn-display" style={{ fontSize: 13.5, fontWeight: 700, margin: "0 0 12px" }}>Skills</p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {fellow.skills.map((s) => <Badge key={s} tone="teal">{s}</Badge>)}
+              {skills.length > 0 ? skills.map((s) => <Badge key={s} tone="teal">{s}</Badge>) : (
+                <p className="tn-body" style={{ fontSize: 13, color: C.slateLight, margin: 0 }}>No skills listed yet.</p>
+              )}
             </div>
           </div>
         </div>
@@ -1140,9 +1176,24 @@ function AuthPage({ mode, go }) {
 
 /* -------------------------------- fellow dashboard ------------------------------- */
 
-function FellowDashboard({ go, openProject, session, profile }) {
+function FellowDashboard({ go, openProject, onEdit, onProjectDeleted, session, profile }) {
   const [myProjects, setMyProjects] = useState([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
+  const [deletingId, setDeletingId] = useState(null);
+
+  const handleDelete = async (p) => {
+    const sure = window.confirm(`Delete "${p.title}"? This can't be undone.`);
+    if (!sure) return;
+    setDeletingId(p.id);
+    const { error } = await supabase.from("projects").delete().eq("id", p.id).eq("created_by", session.user.id);
+    setDeletingId(null);
+    if (error) {
+      window.alert(`Couldn't delete that project: ${error.message}`);
+      return;
+    }
+    setMyProjects((cur) => cur.filter((row) => row.id !== p.id));
+    onProjectDeleted?.();
+  };
 
   // Load this fellow's real submitted projects (there's no "submit a
   // project" form wired up yet, so this will show 0 until that's built).
@@ -1182,7 +1233,7 @@ function FellowDashboard({ go, openProject, session, profile }) {
             <p className="tn-body" style={{ fontSize: 13, color: C.slateLight, margin: 0 }}>{profile?.title || "Fellow"}{profile?.campus_id ? "" : " · No campus set yet"}</p>
           </div>
         </div>
-        <PrimaryButton onClick={() => go("submit")}><Plus size={15} /> Submit a project</PrimaryButton>
+        <PrimaryButton onClick={() => { onEdit?.(null); go("submit"); }}><Plus size={15} /> Submit a project</PrimaryButton>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 40 }}>
@@ -1205,7 +1256,7 @@ function FellowDashboard({ go, openProject, session, profile }) {
           <p className="tn-body" style={{ fontSize: 13.5, color: C.slateLight, margin: "0 0 14px" }}>
             You haven't submitted a project yet.
           </p>
-          <GhostButton small onClick={() => go("submit")}><Plus size={13} /> Submit your first project</GhostButton>
+          <GhostButton small onClick={() => { onEdit?.(null); go("submit"); }}><Plus size={13} /> Submit your first project</GhostButton>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -1218,8 +1269,15 @@ function FellowDashboard({ go, openProject, session, profile }) {
                 </p>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <GhostButton small><Pencil size={13} /> Edit</GhostButton>
-                <GhostButton small style={{ color: C.danger, borderColor: "#F0D3D3" }}><Trash2 size={13} /></GhostButton>
+                <GhostButton small onClick={() => { onEdit?.(p.id); go("submit"); }}><Pencil size={13} /> Edit</GhostButton>
+                <GhostButton
+                  small
+                  disabled={deletingId === p.id}
+                  style={{ color: C.danger, borderColor: "#F0D3D3" }}
+                  onClick={() => handleDelete(p)}
+                >
+                  <Trash2 size={13} />
+                </GhostButton>
               </div>
             </div>
           ))}
@@ -1333,7 +1391,7 @@ function Field({ label, children }) {
   );
 }
 
-function SubmitProjectPage({ go, session, onSubmitted }) {
+function SubmitProjectPage({ go, session, onSubmitted, editId }) {
   const [title, setTitle] = useState("");
   const [shortDesc, setShortDesc] = useState("");
   const [fullDesc, setFullDesc] = useState("");
@@ -1348,8 +1406,45 @@ function SubmitProjectPage({ go, session, onSubmitted }) {
   const [demoUrl, setDemoUrl] = useState("");
   const [coverFile, setCoverFile] = useState(null);
   const [coverPreview, setCoverPreview] = useState(null);
+  const [existingCoverUrl, setExistingCoverUrl] = useState(null);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [loadingExisting, setLoadingExisting] = useState(!!editId);
+
+  // Editing an existing project: load its current data into the form.
+  useEffect(() => {
+    if (!editId) {
+      setLoadingExisting(false);
+      return;
+    }
+    setLoadingExisting(true);
+    supabase
+      .from("projects")
+      .select("*")
+      .eq("id", editId)
+      .single()
+      .then(({ data, error: fetchError }) => {
+        setLoadingExisting(false);
+        if (fetchError || !data) {
+          setError("Couldn't load that project to edit it.");
+          return;
+        }
+        const campus = CAMPUSES.find((c) => c.dbId === data.campus_id);
+        setTitle(data.title || "");
+        setShortDesc(data.short_description || "");
+        setFullDesc(data.full_description || "");
+        setProblem(data.problem_statement || "");
+        setSolution(data.solution || "");
+        setCategory(data.category || "");
+        setCampusSlug(campus?.id || "");
+        setStatus(data.status || "Ongoing");
+        setYear(data.year || new Date().getFullYear());
+        setTechText((data.technologies || []).join(", "));
+        setGithubUrl(data.github_url || "");
+        setDemoUrl(data.demo_url || "");
+        setExistingCoverUrl(data.cover_image_url || null);
+      });
+  }, [editId]);
 
   const handleCoverChange = (e) => {
     const file = e.target.files[0];
@@ -1376,9 +1471,10 @@ function SubmitProjectPage({ go, session, onSubmitted }) {
 
     setSubmitting(true);
 
-    // If a cover photo was picked, upload it to Storage first and get back
-    // a public URL to save alongside the project.
-    let coverImageUrl = null;
+    // If a new cover photo was picked, upload it to Storage first and get
+    // back a public URL. Otherwise keep whatever cover the project already
+    // had (important when editing: no new file shouldn't mean "remove it").
+    let coverImageUrl = existingCoverUrl;
     if (coverFile) {
       const fileExt = coverFile.name.split(".").pop();
       const fileName = `${session.user.id}-${Date.now()}.${fileExt}`;
@@ -1392,7 +1488,7 @@ function SubmitProjectPage({ go, session, onSubmitted }) {
       coverImageUrl = urlData.publicUrl;
     }
 
-    const { error: insertError } = await supabase.from("projects").insert({
+    const payload = {
       title,
       slug: slugify(title),
       short_description: shortDesc,
@@ -1407,21 +1503,36 @@ function SubmitProjectPage({ go, session, onSubmitted }) {
       github_url: githubUrl || null,
       demo_url: demoUrl || null,
       cover_image_url: coverImageUrl,
-      created_by: session.user.id,
-    });
+    };
+
+    const { error: saveError } = editId
+      ? await supabase.from("projects").update(payload).eq("id", editId).eq("created_by", session.user.id)
+      : await supabase.from("projects").insert({ ...payload, created_by: session.user.id });
     setSubmitting(false);
 
-    if (insertError) {
-      setError(insertError.message);
+    if (saveError) {
+      setError(saveError.message);
       return;
     }
     onSubmitted?.();
     go("dashboard");
   };
 
+  if (loadingExisting) {
+    return (
+      <div style={{ maxWidth: 700, margin: "0 auto", padding: "40px 24px 96px" }}>
+        <p className="tn-body" style={{ fontSize: 13.5, color: C.slateLight }}>Loading…</p>
+      </div>
+    );
+  }
+
   return (
     <div style={{ maxWidth: 700, margin: "0 auto", padding: "40px 24px 96px" }}>
-      <SectionHeading eyebrow="New submission" title="Submit a project" sub="Add your project to the Project Hub. An admin will review it before it's featured publicly." />
+      <SectionHeading
+        eyebrow={editId ? "Edit submission" : "New submission"}
+        title={editId ? "Edit project" : "Submit a project"}
+        sub={editId ? "Update your project's details below." : "Add your project to the Project Hub. An admin will review it before it's featured publicly."}
+      />
       <form onSubmit={handleSubmit} style={{ border: `1px solid ${C.line}`, borderRadius: 16, padding: 28, display: "flex", flexDirection: "column", gap: 18 }}>
         <Field label="Project title *">
           <input value={title} onChange={(e) => setTitle(e.target.value)} className="tn-body" style={inputStyle} />
@@ -1464,8 +1575,8 @@ function SubmitProjectPage({ go, session, onSubmitted }) {
 
         <Field label="Project picture">
           <input type="file" accept="image/*" onChange={handleCoverChange} className="tn-body" style={{ fontSize: 13.5 }} />
-          {coverPreview && (
-            <img src={coverPreview} alt="Preview" style={{ marginTop: 10, width: "100%", maxHeight: 180, objectFit: "cover", borderRadius: 10, border: `1px solid ${C.line}` }} />
+          {(coverPreview || existingCoverUrl) && (
+            <img src={coverPreview || existingCoverUrl} alt="Preview" style={{ marginTop: 10, width: "100%", maxHeight: 180, objectFit: "cover", borderRadius: 10, border: `1px solid ${C.line}` }} />
           )}
         </Field>
 
@@ -1486,7 +1597,7 @@ function SubmitProjectPage({ go, session, onSubmitted }) {
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
           <GhostButton small onClick={() => go("dashboard")}>Cancel</GhostButton>
-          <PrimaryButton small disabled={submitting}>{submitting ? "Submitting…" : "Submit project"}</PrimaryButton>
+          <PrimaryButton small disabled={submitting}>{submitting ? "Saving…" : editId ? "Save changes" : "Submit project"}</PrimaryButton>
         </div>
       </form>
     </div>
@@ -1507,6 +1618,7 @@ export default function App() {
   // profile = that user's row in our own "profiles" table (name, role, etc.).
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [editingProjectId, setEditingProjectId] = useState(null);
 
   // On first load, check if there's already a logged-in session (e.g. the
   // person refreshed the page). Then keep listening for login/logout events.
@@ -1613,6 +1725,58 @@ export default function App() {
   // Load the most recently submitted real projects, for the home page
   // Spotlight section. Visitors who aren't logged in only ever see approved
   // ones here (the database enforces that, not this code).
+  // Load real fellows (every signed-up user who isn't an admin) for the
+  // Fellows directory and fellow profile pages, plus a project count per
+  // fellow so cards can show "X projects" without a separate query each.
+  const [fellows, setFellows] = useState([]);
+  const [loadingFellows, setLoadingFellows] = useState(true);
+  const [projectCounts, setProjectCounts] = useState({});
+  useEffect(() => {
+    supabase
+      .from("profiles")
+      .select("*")
+      .then(({ data, error }) => {
+        setLoadingFellows(false);
+        if (error) {
+          console.error("Failed to load fellows:", error);
+          return;
+        }
+        const mapped = (data || [])
+          .filter((row) => row.role !== "administrator" && row.role !== "super_administrator")
+          .map((row) => {
+            const campus = CAMPUSES.find((c) => c.dbId === row.campus_id);
+            return {
+              id: row.id,
+              name: row.full_name || "Fellow",
+              title: row.title || "Fellow",
+              city: row.city || "",
+              campusId: campus?.id || null,
+              skills: row.skills || [],
+              bio: row.bio || "",
+              linkedin: row.linkedin_url || null,
+              github: row.github_url || null,
+            };
+          });
+        setFellows(mapped);
+      });
+
+    supabase
+      .from("projects")
+      .select("id, created_by")
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("Failed to load project counts:", error);
+          return;
+        }
+        const counts = {};
+        (data || []).forEach((row) => {
+          if (!row.created_by) return;
+          counts[row.created_by] = (counts[row.created_by] || 0) + 1;
+        });
+        setProjectCounts(counts);
+      });
+  }, []);
+
   const [recentProjects, setRecentProjects] = useState([]);
   const mapProjectRow = (row) => {
     const campus = CAMPUSES.find((c) => c.dbId === row.campus_id);
@@ -1703,7 +1867,7 @@ export default function App() {
   const onBookmark = toggleSet(setBookmarked);
 
   const project = PROJECTS.find((p) => p.id === selectedId) || recentProjects.find((p) => p.id === selectedId) || fetchedProject;
-  const fellow = FELLOWS.find((f) => f.id === selectedId);
+  const fellow = fellows.find((f) => f.id === selectedId);
   const campus = getCampus(selectedId);
   const anchor = ANCHORS.find((a) => a.id === selectedId);
 
@@ -1715,7 +1879,7 @@ export default function App() {
       {view === "home" && <HomePage go={go} openProject={openProject} liked={liked} bookmarked={bookmarked} onLike={onLike} onBookmark={onBookmark} recentProjects={recentProjects} />}
       {view === "explore" && <ExplorePage go={go} openProject={openProject} liked={liked} bookmarked={bookmarked} onLike={onLike} onBookmark={onBookmark} />}
       {view === "project" && <ProjectDetailPage project={project} go={go} openFellow={openFellow} liked={liked} bookmarked={bookmarked} onLike={onLike} onBookmark={onBookmark} />}
-      {view === "fellows" && <FellowsPage go={go} openFellow={openFellow} />}
+      {view === "fellows" && <FellowsPage go={go} openFellow={openFellow} fellows={fellows} projectCounts={projectCounts} loadingFellows={loadingFellows} />}
       {view === "fellow" && <FellowProfilePage fellow={fellow} go={go} openProject={openProject} />}
       {view === "campuses" && <CampusesPage go={go} />}
       {view === "campus" && <CampusDetailPage campus={campus} go={go} openFellow={openFellow} openProject={openProject} />}
@@ -1724,9 +1888,16 @@ export default function App() {
       {view === "about" && <AboutPage go={go} />}
       {view === "login" && <AuthPage mode="login" go={go} />}
       {view === "signup" && <AuthPage mode="signup" go={go} />}
-      {view === "dashboard" && <FellowDashboard go={go} openProject={openProject} session={session} profile={profile} />}
+      {view === "dashboard" && <FellowDashboard go={go} openProject={openProject} onEdit={setEditingProjectId} onProjectDeleted={fetchRecentProjects} session={session} profile={profile} />}
       {view === "admin" && <AdminDashboard />}
-      {view === "submit" && <SubmitProjectPage go={go} session={session} onSubmitted={fetchRecentProjects} />}
+      {view === "submit" && (
+        <SubmitProjectPage
+          go={go}
+          session={session}
+          onSubmitted={() => { fetchRecentProjects(); setEditingProjectId(null); }}
+          editId={editingProjectId}
+        />
+      )}
 
       <Footer go={go} />
     </div>
