@@ -1328,7 +1328,7 @@ function Field({ label, children }) {
   );
 }
 
-function SubmitProjectPage({ go, session }) {
+function SubmitProjectPage({ go, session, onSubmitted }) {
   const [title, setTitle] = useState("");
   const [shortDesc, setShortDesc] = useState("");
   const [fullDesc, setFullDesc] = useState("");
@@ -1410,6 +1410,7 @@ function SubmitProjectPage({ go, session }) {
       setError(insertError.message);
       return;
     }
+    onSubmitted?.();
     go("dashboard");
   };
 
@@ -1608,7 +1609,31 @@ export default function App() {
   // Spotlight section. Visitors who aren't logged in only ever see approved
   // ones here (the database enforces that, not this code).
   const [recentProjects, setRecentProjects] = useState([]);
-  useEffect(() => {
+  const mapProjectRow = (row) => {
+    const campus = CAMPUSES.find((c) => c.dbId === row.campus_id);
+    return {
+      id: row.id,
+      title: row.title,
+      campusId: campus?.id || null,
+      fellowIds: [],
+      category: row.category || "",
+      technologies: row.technologies || [],
+      status: row.status || "Ongoing",
+      year: row.year || new Date().getFullYear(),
+      views: row.views || 0,
+      likes: 0,
+      shortDesc: row.short_description || "",
+      problem: row.problem_statement || "",
+      solution: row.solution || "",
+      objectives: row.objectives || "",
+      audience: row.target_audience || "",
+      challenges: "", results: "", impact: "", future: "",
+      github: row.github_url || "#",
+      demo: row.demo_url || "#",
+      cover: row.cover_image_url || null,
+    };
+  };
+  const fetchRecentProjects = () => {
     supabase
       .from("projects")
       .select("*")
@@ -1619,33 +1644,40 @@ export default function App() {
           console.error("Failed to load recent projects:", error);
           return;
         }
-        const mapped = (data || []).map((row) => {
-          const campus = CAMPUSES.find((c) => c.dbId === row.campus_id);
-          return {
-            id: row.id,
-            title: row.title,
-            campusId: campus?.id || null,
-            fellowIds: [],
-            category: row.category || "",
-            technologies: row.technologies || [],
-            status: row.status || "Ongoing",
-            year: row.year || new Date().getFullYear(),
-            views: row.views || 0,
-            likes: 0,
-            shortDesc: row.short_description || "",
-            problem: row.problem_statement || "",
-            solution: row.solution || "",
-            objectives: row.objectives || "",
-            audience: row.target_audience || "",
-            challenges: "", results: "", impact: "", future: "",
-            github: row.github_url || "#",
-            demo: row.demo_url || "#",
-            cover: row.cover_image_url || null,
-          };
-        });
-        setRecentProjects(mapped);
+        setRecentProjects((data || []).map(mapProjectRow));
       });
+  };
+  useEffect(() => {
+    fetchRecentProjects();
   }, []);
+
+  // If the project someone is viewing isn't already in PROJECTS or
+  // recentProjects (e.g. an older submission that fell off the top-6 list),
+  // fetch it directly by id so "View" never shows a blank page.
+  const [fetchedProject, setFetchedProject] = useState(null);
+  useEffect(() => {
+    if (view !== "project" || !selectedId) return;
+    const already =
+      PROJECTS.find((p) => p.id === selectedId) ||
+      recentProjects.find((p) => p.id === selectedId);
+    if (already) {
+      setFetchedProject(null);
+      return;
+    }
+    supabase
+      .from("projects")
+      .select("*")
+      .eq("id", selectedId)
+      .single()
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("Failed to load project:", error);
+          setFetchedProject(null);
+          return;
+        }
+        setFetchedProject(mapProjectRow(data));
+      });
+  }, [view, selectedId, recentProjects]);
 
   const go = (v, id) => {
     setView(v);
@@ -1665,7 +1697,7 @@ export default function App() {
   const onLike = toggleSet(setLiked);
   const onBookmark = toggleSet(setBookmarked);
 
-  const project = PROJECTS.find((p) => p.id === selectedId) || recentProjects.find((p) => p.id === selectedId);
+  const project = PROJECTS.find((p) => p.id === selectedId) || recentProjects.find((p) => p.id === selectedId) || fetchedProject;
   const fellow = FELLOWS.find((f) => f.id === selectedId);
   const campus = getCampus(selectedId);
   const anchor = ANCHORS.find((a) => a.id === selectedId);
@@ -1689,7 +1721,7 @@ export default function App() {
       {view === "signup" && <AuthPage mode="signup" go={go} />}
       {view === "dashboard" && <FellowDashboard go={go} openProject={openProject} session={session} profile={profile} />}
       {view === "admin" && <AdminDashboard />}
-      {view === "submit" && <SubmitProjectPage go={go} session={session} />}
+      {view === "submit" && <SubmitProjectPage go={go} session={session} onSubmitted={fetchRecentProjects} />}
 
       <Footer go={go} />
     </div>
