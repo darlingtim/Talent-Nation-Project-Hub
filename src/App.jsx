@@ -106,6 +106,10 @@ const fellowsByCampus = (id) => FELLOWS.filter((f) => f.campusId === id);
 const getCampus = (id) => CAMPUSES.find((c) => c.id === id);
 const getCampusByDbId = (dbId) => CAMPUSES.find((c) => c.dbId === dbId);
 
+// Only treat a "photo" as a picture if it is a web address or a /public path
+// (the mock anchors above store initials in that field).
+const isPhotoUrl = (p) => typeof p === "string" && (p.startsWith("http") || p.startsWith("/"));
+
 const ANCHORS = [
   {
     id: "amara-nwachukwu", name: "Amara Nwachukwu", role: "Founder & CEO",
@@ -1176,17 +1180,22 @@ function AnchorsPage({ go, openAnchor }) {
         </div>
       </div>
       <div style={{ maxWidth: 1000, margin: "0 auto", padding: "56px 24px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, marginBottom: 64 }}>
-          {ANCHORS.map((a) => (
-            <div key={a.id} style={{ border: `1px solid ${C.line}`, borderRadius: 18, padding: 24, textAlign: "center" }}>
-              <div style={{ margin: "0 auto 16px" }}><Avatar name={a.name} size={72} hue={a.tag === "Founder" ? C.gold : C.teal} /></div>
-              <Badge tone={a.tag === "Founder" ? "gold" : "teal"} style={{ marginBottom: 10 }}>{a.tag}</Badge>
-              <p className="tn-display" style={{ fontWeight: 700, fontSize: 17, margin: "0 0 2px" }}>{a.name}</p>
-              <p className="tn-body" style={{ fontSize: 12.5, color: C.slateLight, margin: "0 0 14px" }}>{a.role}</p>
-              <p className="tn-body" style={{ fontSize: 13, color: C.slate, lineHeight: 1.6, margin: "0 0 18px" }}>{a.shortBio}</p>
-              <GhostButton small onClick={() => openAnchor(a.id)}>Read more</GhostButton>
-            </div>
-          ))}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, marginBottom: 64, alignItems: "start" }}>
+          {ANCHORS.map((a, i) => {
+            const compact = i >= 2; // the first two are the large cards; any others are smaller
+            return (
+              <div key={a.id} style={{ border: `1px solid ${C.line}`, borderRadius: compact ? 14 : 18, padding: compact ? 16 : 24, textAlign: "center" }}>
+                <div style={{ margin: compact ? "0 auto 10px" : "0 auto 16px", display: "flex", justifyContent: "center" }}>
+                  <Avatar name={a.name} size={compact ? 52 : 72} hue={a.tag === "Founder" ? C.gold : C.teal} photo={isPhotoUrl(a.photo) ? a.photo : undefined} />
+                </div>
+                <Badge tone={a.tag === "Founder" ? "gold" : "teal"} style={{ marginBottom: compact ? 6 : 10 }}>{a.tag}</Badge>
+                <p className="tn-display" style={{ fontWeight: 700, fontSize: compact ? 15 : 17, margin: "0 0 2px" }}>{a.name}</p>
+                <p className="tn-body" style={{ fontSize: compact ? 12 : 12.5, color: C.slateLight, margin: compact ? "0 0 8px" : "0 0 14px" }}>{a.role}</p>
+                <p className="tn-body" style={{ fontSize: compact ? 12 : 13, color: C.slate, lineHeight: 1.55, margin: compact ? "0 0 12px" : "0 0 18px" }}>{a.shortBio}</p>
+                <GhostButton small onClick={() => openAnchor(a.id)}>Read more</GhostButton>
+              </div>
+            );
+          })}
         </div>
 
         <div style={{ background: C.paper, borderRadius: 20, padding: 40 }}>
@@ -1201,19 +1210,21 @@ function AnchorsPage({ go, openAnchor }) {
 }
 
 function AnchorDetailPage({ anchor, go }) {
+  const [openPhoto, setOpenPhoto] = useState(null);
   if (!anchor) return null;
+  const gallery = (anchor.gallery || []).filter(isPhotoUrl);
   return (
     <div style={{ maxWidth: 800, margin: "0 auto", padding: "40px 24px 96px" }}>
       <GhostButton small onClick={() => go("anchors")} style={{ marginBottom: 24 }}><ArrowLeft size={14} /> All anchors</GhostButton>
       <div style={{ display: "flex", gap: 20, alignItems: "center", marginBottom: 32 }}>
-        <Avatar name={anchor.name} size={80} hue={anchor.tag === "Founder" ? C.gold : C.teal} />
+        <Avatar name={anchor.name} size={80} hue={anchor.tag === "Founder" ? C.gold : C.teal} photo={isPhotoUrl(anchor.photo) ? anchor.photo : undefined} />
         <div>
           <Badge tone={anchor.tag === "Founder" ? "gold" : "teal"} style={{ marginBottom: 8 }}>{anchor.tag}</Badge>
           <h1 className="tn-display" style={{ fontSize: 26, fontWeight: 700, margin: "0 0 4px" }}>{anchor.name}</h1>
           <p className="tn-body" style={{ fontSize: 14, color: C.slateLight, margin: 0 }}>{anchor.role}</p>
         </div>
       </div>
-      {[["Background", anchor.background], ["Contribution to Talent Nation", anchor.contribution]].map(([label, val]) => (
+      {[["Background", anchor.background], ["Contribution to Talent Nation", anchor.contribution]].filter(([, val]) => val).map(([label, val]) => (
         <div key={label} style={{ marginBottom: 24 }}>
           <p className="tn-display" style={{ fontSize: 14.5, fontWeight: 700, margin: "0 0 6px" }}>{label}</p>
           <p className="tn-body" style={{ fontSize: 14, color: C.slate, lineHeight: 1.65, margin: 0 }}>{val}</p>
@@ -1225,12 +1236,38 @@ function AnchorDetailPage({ anchor, go }) {
           {anchor.expertise.map((e) => <Badge key={e} tone="teal">{e}</Badge>)}
         </div>
       </div>
-      <div style={{ background: C.paper, borderRadius: 16, padding: 24, display: "flex", gap: 12 }}>
+      {anchor.vision && <div style={{ background: C.paper, borderRadius: 16, padding: 24, display: "flex", gap: 12 }}>
         <Quote size={18} color={C.teal} style={{ flexShrink: 0, marginTop: 2 }} />
         <p className="tn-body" style={{ fontSize: 14.5, color: C.ink, lineHeight: 1.7, fontStyle: "italic", margin: 0 }}>{anchor.vision}</p>
+      </div>}
+
+      <div style={{ marginTop: 36 }}>
+        <p className="tn-display" style={{ fontSize: 14.5, fontWeight: 700, margin: "0 0 12px" }}>Gallery</p>
+        {gallery.length === 0 ? (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+            {[0, 1, 2].map((n) => (
+              <div key={n} className="tn-body" style={{ aspectRatio: "4 / 3", border: `1.5px dashed ${C.line}`, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12.5, color: C.slateLight }}>
+                Photos coming soon
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+            {gallery.map((src, n) => (
+              <div
+                key={n}
+                onClick={() => setOpenPhoto(src)}
+                title="Click to view full picture"
+                style={{ aspectRatio: "4 / 3", borderRadius: 12, background: `url(${src}) center/cover`, cursor: "zoom-in", border: `1px solid ${C.line}` }}
+              />
+            ))}
+          </div>
+        )}
       </div>
-      <div style={{ marginTop: 24 }}>
-        <GhostButton small><Link2 size={14} /> LinkedIn</GhostButton>
+      {openPhoto && <PhotoLightbox src={openPhoto} onClose={() => setOpenPhoto(null)} />}
+
+      <div style={{ marginTop: 28 }}>
+        <GhostButton small onClick={() => anchor.linkedin && window.open(anchor.linkedin, "_blank")}><Link2 size={14} /> LinkedIn</GhostButton>
       </div>
     </div>
   );
@@ -2345,6 +2382,7 @@ export default function App() {
           contribution: row.contribution,
           vision: row.vision,
           linkedin: row.linkedin_url,
+          gallery: row.gallery || [],
         }));
         ANCHORS.splice(0, ANCHORS.length, ...live);
         forceRerender((n) => n + 1);
