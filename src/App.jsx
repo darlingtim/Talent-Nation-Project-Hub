@@ -165,18 +165,35 @@ function Badge({ children, tone = "neutral", style }) {
   );
 }
 
-function Avatar({ name, size = 40, hue = C.ink }) {
+function Avatar({ name, size = 40, hue = C.ink, photo }) {
   const initials = name.split(" ").map((n) => n[0]).slice(0, 2).join("");
   return (
     <div
       style={{
-        width: size, height: size, borderRadius: "50%", background: hue, color: C.white,
+        width: size, height: size, borderRadius: "50%", color: C.white,
+        background: photo ? `url(${photo}) center/cover` : hue,
         display: "flex", alignItems: "center", justifyContent: "center",
         fontWeight: 700, fontSize: size * 0.36, flexShrink: 0,
       }}
       className="tn-display"
     >
-      {initials}
+      {photo ? null : initials}
+    </div>
+  );
+}
+
+// Full-screen overlay showing a picture at full size. Click anywhere to close.
+function PhotoLightbox({ src, onClose }) {
+  if (!src) return null;
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(18,20,31,0.88)", zIndex: 1000,
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 24, cursor: "zoom-out",
+      }}
+    >
+      <img src={src} alt="Full size" style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 12, objectFit: "contain" }} />
     </div>
   );
 }
@@ -316,7 +333,7 @@ function ProjectCard({ project, onOpen, liked, bookmarked, onLike, onBookmark, b
 
 /* ---------------------------------- navbar ---------------------------------- */
 
-function NavBar({ view, go, role, displayName, onLogout, mobileOpen, setMobileOpen }) {
+function NavBar({ view, go, role, displayName, avatarUrl, onLogout, mobileOpen, setMobileOpen }) {
   const links = [
     ["home", "Home"],
     ["explore", "Explore projects"],
@@ -370,7 +387,7 @@ function NavBar({ view, go, role, displayName, onLogout, mobileOpen, setMobileOp
                 style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center" }}
                 aria-label="Open dashboard"
               >
-                <Avatar name={displayName || "Fellow"} size={34} hue={C.teal} />
+                <Avatar name={displayName || "Fellow"} size={34} hue={C.teal} photo={avatarUrl} />
               </button>
               <GhostButton small onClick={onLogout}>Log out</GhostButton>
             </>
@@ -454,14 +471,15 @@ function Footer({ go }) {
 
 /* ---------------------------------- home page --------------------------------- */
 
-function HomePage({ go, openProject, liked, bookmarked, onLike, onBookmark, recentProjects }) {
-  const totalFellows = CAMPUSES.reduce((s, c) => s + c.fellowCount, 0);
+function HomePage({ go, openProject, liked, bookmarked, onLike, onBookmark, recentProjects, campusStats }) {
+  const totalFellows = campusStats.totalFellows;
+  const totalProjects = campusStats.totalProjects;
   // Show real fellow-submitted projects (most recent first) once any exist;
   // fall back to the curated mock "featured" set until then.
-  const featured = recentProjects && recentProjects.length > 0 ? recentProjects : PROJECTS.filter((p) => p.featured);
+  const featured = recentProjects || [];
   const stats = [
-    { label: "Fellows", value: `${totalFellows.toLocaleString()}+`, icon: Users },
-    { label: "Projects", value: `${PROJECTS.length}+`, icon: FolderKanban },
+    { label: "Fellows", value: totalFellows.toLocaleString(), icon: Users },
+    { label: "Projects", value: totalProjects.toLocaleString(), icon: FolderKanban },
     { label: "Campuses", value: CAMPUSES.length, icon: Building2 },
     { label: "Categories", value: CATEGORIES.length, icon: Sparkles },
   ];
@@ -476,7 +494,7 @@ function HomePage({ go, openProject, liked, bookmarked, onLike, onBookmark, rece
         }} />
         <div style={{ maxWidth: 900, margin: "0 auto", padding: "96px 24px 40px", position: "relative", textAlign: "center" }}>
           <Badge tone="ink" style={{ border: "1px solid rgba(255,255,255,0.25)", marginBottom: 22 }}>
-            <Sparkles size={12} /> {totalFellows.toLocaleString()}+ fellows across {CAMPUSES.length} campuses
+            <Sparkles size={12} /> {totalFellows.toLocaleString()} fellows across {CAMPUSES.length} campuses
           </Badge>
           <h1 className="tn-display" style={{ color: C.white, fontSize: 52, fontWeight: 700, lineHeight: 1.08, margin: "0 0 20px" }}>
             Discover ideas. Explore innovation.<br />Celebrate talent.
@@ -534,7 +552,7 @@ function HomePage({ go, openProject, liked, bookmarked, onLike, onBookmark, rece
               </div>
               <p className="tn-display" style={{ fontWeight: 700, fontSize: 15, margin: "0 0 4px", color: C.ink }}>{c.name}</p>
               <p className="tn-body" style={{ fontSize: 12.5, color: C.slateLight, margin: "0 0 10px" }}>{c.city}, {c.country}</p>
-              <p className="tn-body" style={{ fontSize: 12.5, color: C.slate, margin: 0 }}>{c.fellowCount} fellows · {projectsByCampus(c.id).length} projects</p>
+              <p className="tn-body" style={{ fontSize: 12.5, color: C.slate, margin: 0 }}>{campusStats.fellows[c.id] || 0} fellows · {campusStats.projects[c.id] || 0} projects</p>
             </div>
           ))}
         </div>
@@ -557,7 +575,7 @@ function HomePage({ go, openProject, liked, bookmarked, onLike, onBookmark, rece
 
 /* ------------------------------- explore projects ------------------------------ */
 
-function ExplorePage({ go, openProject, liked, bookmarked, onLike, onBookmark }) {
+function ExplorePage({ go, openProject, liked, bookmarked, onLike, onBookmark, projects, loading }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
   const [campus, setCampus] = useState("All");
@@ -566,19 +584,19 @@ function ExplorePage({ go, openProject, liked, bookmarked, onLike, onBookmark })
   const [visible, setVisible] = useState(9);
 
   const filtered = useMemo(() => {
-    let list = PROJECTS.filter((p) => {
+    let list = projects.filter((p) => {
       const matchQuery = query.trim() === "" || p.title.toLowerCase().includes(query.toLowerCase()) || p.shortDesc.toLowerCase().includes(query.toLowerCase());
       const matchCategory = category === "All" || p.category === category;
       const matchCampus = campus === "All" || p.campusId === campus;
       const matchStatus = status === "All" || p.status === status;
       return matchQuery && matchCategory && matchCampus && matchStatus;
     });
-    if (sort === "Most recent") list = [...list].sort((a, b) => b.year - a.year);
+    if (sort === "Most recent") list = [...list].sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
     if (sort === "Most viewed") list = [...list].sort((a, b) => b.views - a.views);
     if (sort === "Most liked") list = [...list].sort((a, b) => b.likes - a.likes);
     if (sort === "Alphabetical") list = [...list].sort((a, b) => a.title.localeCompare(b.title));
     return list;
-  }, [query, category, campus, status, sort]);
+  }, [projects, query, category, campus, status, sort]);
 
   const selectStyle = {
     padding: "10px 12px", borderRadius: 10, border: `1px solid ${C.line}`,
@@ -587,7 +605,7 @@ function ExplorePage({ go, openProject, liked, bookmarked, onLike, onBookmark })
 
   return (
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: "48px 24px 96px" }}>
-      <SectionHeading eyebrow="Discover" title="Explore projects" sub={`Browse ${PROJECTS.length} projects built by Talent Nation fellows. Filter by category, campus, technology, and status.`} />
+      <SectionHeading eyebrow="Discover" title="Explore projects" sub={`Browse ${projects.length} approved project${projects.length !== 1 ? "s" : ""} built by Talent Nation fellows. Filter by category, campus, and status.`} />
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 28, alignItems: "center" }}>
         <div style={{ position: "relative", flex: "1 1 260px" }}>
@@ -619,9 +637,11 @@ function ExplorePage({ go, openProject, liked, bookmarked, onLike, onBookmark })
 
       <p className="tn-body" style={{ fontSize: 13, color: C.slateLight, margin: "0 0 20px" }}>{filtered.length} project{filtered.length !== 1 ? "s" : ""} found</p>
 
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div style={{ textAlign: "center", padding: "64px 0", color: C.slateLight }} className="tn-body">Loading…</div>
+      ) : filtered.length === 0 ? (
         <div style={{ textAlign: "center", padding: "64px 0", color: C.slateLight }} className="tn-body">
-          No projects match those filters. Try widening your search.
+          {projects.length === 0 ? "No approved projects yet. Check back soon." : "No projects match those filters. Try widening your search."}
         </div>
       ) : (
         <>
@@ -796,9 +816,9 @@ function FellowsPage({ go, openFellow, fellows, projectCounts, loadingFellows })
               const campusObj = getCampus(f.campusId);
               return (
                 <div key={f.id} onClick={() => openFellow(f.id)} style={{ cursor: "pointer", border: `1px solid ${C.line}`, borderRadius: 16, padding: 18, background: C.white }}>
-                  <Avatar name={f.name} size={44} hue={campusObj?.hue || C.teal} />
+                  <Avatar name={f.name} size={44} hue={campusObj?.hue || C.teal} photo={f.avatarUrl} />
                   <p className="tn-display" style={{ fontWeight: 700, fontSize: 14.5, margin: "12px 0 2px" }}>{f.name}</p>
-                  <p className="tn-body" style={{ fontSize: 12.5, color: C.slateLight, margin: "0 0 10px" }}>{f.title}</p>
+                  <p className="tn-body" style={{ fontSize: 12.5, color: C.slateLight, margin: "0 0 10px" }}>{f.userName ? `@${f.userName} · ` : ""}{f.title}</p>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 12 }}>
                     {f.skills.slice(0, 2).map((s) => <Badge key={s}>{s}</Badge>)}
                   </div>
@@ -818,6 +838,20 @@ function FellowsPage({ go, openFellow, fellows, projectCounts, loadingFellows })
 function FellowProfilePage({ fellow, go, openProject }) {
   const [projects, setProjects] = useState([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
+  const [showPhoto, setShowPhoto] = useState(false);
+  const [roles, setRoles] = useState([]);
+
+  useEffect(() => {
+    if (!fellow) return;
+    supabase
+      .from("campus_mentors")
+      .select("is_head, campus_id")
+      .eq("user_id", fellow.id)
+      .then(({ data, error }) => {
+        if (error) { console.error("Failed to load roles:", error); return; }
+        setRoles(data || []);
+      });
+  }, [fellow?.id]);
 
   useEffect(() => {
     if (!fellow) return;
@@ -844,10 +878,26 @@ function FellowProfilePage({ fellow, go, openProject }) {
     <div style={{ maxWidth: 1000, margin: "0 auto", padding: "40px 24px 96px" }}>
       <GhostButton small onClick={() => go("fellows")} style={{ marginBottom: 24 }}><ArrowLeft size={14} /> Back to fellows</GhostButton>
       <div style={{ display: "flex", gap: 24, marginBottom: 36, flexWrap: "wrap" }}>
-        <Avatar name={fellow.name} size={92} hue={campus?.hue || C.teal} />
+        <div
+          onClick={() => fellow.avatarUrl && setShowPhoto(true)}
+          style={{ cursor: fellow.avatarUrl ? "zoom-in" : "default" }}
+          title={fellow.avatarUrl ? "Click to view full picture" : undefined}
+        >
+          <Avatar name={fellow.name} size={160} hue={campus?.hue || C.teal} photo={fellow.avatarUrl} />
+        </div>
+        {showPhoto && <PhotoLightbox src={fellow.avatarUrl} onClose={() => setShowPhoto(false)} />}
         <div style={{ flex: 1, minWidth: 260 }}>
           <h1 className="tn-display" style={{ fontSize: 28, fontWeight: 700, margin: "0 0 4px" }}>{fellow.name}</h1>
+          {fellow.userName && <p className="tn-body" style={{ fontSize: 13, color: C.slateLight, margin: "0 0 4px" }}>@{fellow.userName}</p>}
           <p className="tn-body" style={{ fontSize: 15, color: C.teal, fontWeight: 600, margin: "0 0 10px" }}>{fellow.title}</p>
+          {roles.map((r, i) => {
+            const rc = CAMPUSES.find((c) => c.dbId === r.campus_id);
+            return (
+              <p key={i} className="tn-body" style={{ display: "inline-block", fontSize: 12.5, fontWeight: 700, color: C.ink, background: C.gold, borderRadius: 999, padding: "4px 12px", margin: "0 8px 10px 0" }}>
+                {r.is_head ? "Head of Campus" : "Coding Mentor"}{rc ? ` · ${rc.name}` : ""}
+              </p>
+            );
+          })}
           <p className="tn-body" style={{ fontSize: 13.5, color: C.slate, display: "flex", alignItems: "center", gap: 6, margin: "0 0 14px" }}>
             <MapPin size={13} /> {fellow.city || "—"} {campus && <><span style={{ color: C.slateLight }}>·</span> {campus.name}</>}
           </p>
@@ -894,7 +944,7 @@ function FellowProfilePage({ fellow, go, openProject }) {
 
 /* ---------------------------------- campuses ---------------------------------- */
 
-function CampusesPage({ go }) {
+function CampusesPage({ go, campusStats }) {
   return (
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: "48px 24px 96px" }}>
       <SectionHeading eyebrow="Where fellows learn" title="Campuses" sub="Every fellow belongs to a Talent Nation campus. Explore each one and the projects it has produced." />
@@ -907,7 +957,7 @@ function CampusesPage({ go }) {
               <p className="tn-body" style={{ fontSize: 13, color: C.slateLight, display: "flex", alignItems: "center", gap: 5, margin: "0 0 12px" }}><MapPin size={12} /> {c.city}, {c.country}</p>
               <p className="tn-body" style={{ fontSize: 13.5, color: C.slate, lineHeight: 1.6, margin: "0 0 16px" }}>{c.desc}</p>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <p className="tn-body" style={{ fontSize: 12.5, color: C.slate, margin: 0 }}>{c.fellowCount} fellows · {projectsByCampus(c.id).length} projects</p>
+                <p className="tn-body" style={{ fontSize: 12.5, color: C.slate, margin: 0 }}>{campusStats.fellows[c.id] || 0} fellows · {campusStats.projects[c.id] || 0} projects</p>
                 <GhostButton small onClick={() => go("campus", c.id)}>View campus <ChevronRight size={13} /></GhostButton>
               </div>
             </div>
@@ -918,10 +968,92 @@ function CampusesPage({ go }) {
   );
 }
 
-function CampusDetailPage({ campus, go, openFellow, openProject }) {
+function CampusDetailPage({ campus, go, openFellow, openProject, allFellows, myMentorships, onMentorsChanged }) {
+  const [projects, setProjects] = useState([]);
+  const [loadingProjects, setLoadingProjects] = useState(true);
+  const [mentors, setMentors] = useState([]);
+  const [mentorEmail, setMentorEmail] = useState("");
+  const [mentorError, setMentorError] = useState("");
+  const [mentorBusy, setMentorBusy] = useState(false);
+
+  const amHead = !!campus && myMentorships.some((m) => m.campus_id === campus.dbId && m.is_head);
+
+  // Head of Campus + Coding Mentors for this campus (head listed first).
+  const fetchMentors = () => {
+    if (!campus?.dbId) return;
+    supabase
+      .from("campus_mentors")
+      .select("user_id, is_head")
+      .eq("campus_id", campus.dbId)
+      .then(async ({ data, error }) => {
+        if (error) {
+          console.error("Failed to load mentors:", error);
+          return;
+        }
+        const rows = data || [];
+        if (rows.length === 0) {
+          setMentors([]);
+          return;
+        }
+        const { data: profs } = await supabase.from("profiles").select("*").in("id", rows.map((r) => r.user_id));
+        const byId = {};
+        (profs || []).forEach((p) => { byId[p.id] = p; });
+        const merged = rows
+          .map((r) => ({ ...r, profile: byId[r.user_id] }))
+          .filter((r) => r.profile)
+          .sort((a, b) => Number(b.is_head) - Number(a.is_head));
+        setMentors(merged);
+      });
+  };
+  useEffect(fetchMentors, [campus?.dbId]);
+
+  const handleAddMentor = async (e) => {
+    e.preventDefault();
+    setMentorError("");
+    if (!mentorEmail.trim()) return;
+    setMentorBusy(true);
+    const { error } = await supabase.rpc("add_campus_mentor", { p_campus: campus.dbId, p_email: mentorEmail.trim() });
+    setMentorBusy(false);
+    if (error) {
+      setMentorError(error.message);
+      return;
+    }
+    setMentorEmail("");
+    fetchMentors();
+    onMentorsChanged?.();
+  };
+
+  const handleRemoveMentor = async (m) => {
+    if (!window.confirm(`Remove ${m.profile.full_name || "this mentor"} as a coding mentor?`)) return;
+    const { error } = await supabase.rpc("remove_campus_mentor", { p_campus: campus.dbId, p_user: m.user_id });
+    if (error) {
+      window.alert(error.message);
+      return;
+    }
+    fetchMentors();
+  };
+
+  // Real projects submitted under this campus.
+  useEffect(() => {
+    if (!campus?.dbId) return;
+    setLoadingProjects(true);
+    supabase
+      .from("projects")
+      .select("*")
+      .eq("campus_id", campus.dbId)
+      .order("created_at", { ascending: false })
+      .then(({ data, error }) => {
+        setLoadingProjects(false);
+        if (error) {
+          console.error("Failed to load campus projects:", error);
+          return;
+        }
+        setProjects(data || []);
+      });
+  }, [campus?.dbId]);
+
   if (!campus) return null;
-  const fellows = fellowsByCampus(campus.id);
-  const projects = projectsByCampus(campus.id);
+  const fellows = allFellows.filter((f) => f.campusId === campus.id);
   return (
     <div>
       <div style={{ background: `linear-gradient(135deg, ${campus.hue}, ${C.ink})`, padding: "56px 24px" }}>
@@ -934,7 +1066,7 @@ function CampusDetailPage({ campus, go, openFellow, openProject }) {
       </div>
       <div style={{ maxWidth: 1000, margin: "0 auto", padding: "40px 24px 96px" }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 48 }}>
-          {[["Fellows", campus.fellowCount, Users], ["Projects on hub", projects.length, FolderKanban], ["Featured", projects.filter((p) => p.featured).length, Sparkles]].map(([label, val, Icon]) => (
+          {[["Fellows", fellows.length, Users], ["Projects on hub", projects.length, FolderKanban], ["Completed", projects.filter((p) => p.status === "Completed").length, Sparkles]].map(([label, val, Icon]) => (
             <div key={label} style={{ border: `1px solid ${C.line}`, borderRadius: 14, padding: 18, textAlign: "center" }}>
               <Icon size={18} color={C.teal} style={{ marginBottom: 8 }} />
               <p className="tn-display" style={{ fontSize: 24, fontWeight: 700, margin: "0 0 2px" }}>{val}</p>
@@ -943,25 +1075,88 @@ function CampusDetailPage({ campus, go, openFellow, openProject }) {
           ))}
         </div>
 
+        <p className="tn-display" style={{ fontSize: 17, fontWeight: 700, margin: "0 0 16px" }}>Campus leadership</p>
+        {mentors.length === 0 ? (
+          <p className="tn-body" style={{ fontSize: 13.5, color: C.slateLight, margin: "0 0 48px" }}>No Head of Campus has been assigned yet.</p>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: amHead ? 16 : 48 }}>
+            {mentors.map((m) => {
+              const p = m.profile;
+              const skills = p.skills || [];
+              const canOpen = allFellows.some((f) => f.id === p.id);
+              return (
+                <div
+                  key={m.user_id}
+                  onClick={() => canOpen && openFellow(p.id)}
+                  style={{ cursor: canOpen ? "pointer" : "default", border: `1px solid ${m.is_head ? C.gold : C.line}`, borderRadius: 16, padding: 18, background: C.white }}
+                >
+                  <Avatar name={p.full_name || "Mentor"} size={44} hue={campus.hue} photo={p.avatar_url} />
+                  <p className="tn-display" style={{ fontWeight: 700, fontSize: 14.5, margin: "12px 0 2px" }}>{p.full_name || "Mentor"}</p>
+                  <p className="tn-body" style={{ fontSize: 12.5, color: C.teal, fontWeight: 600, margin: "0 0 10px" }}>
+                    {m.is_head ? "Head of Campus" : "Coding Mentor"}{p.user_name ? ` · @${p.user_name}` : ""}
+                  </p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 12 }}>
+                    {skills.slice(0, 2).map((s) => <Badge key={s}>{s}</Badge>)}
+                  </div>
+                  <p className="tn-body" style={{ fontSize: 12, color: C.slate, display: "flex", alignItems: "center", gap: 4, margin: 0 }}>
+                    <MapPin size={11} /> {p.city || campus.city}
+                  </p>
+                  {amHead && !m.is_head && (
+                    <div style={{ marginTop: 10 }} onClick={(e) => e.stopPropagation()}>
+                      <GhostButton small style={{ color: C.danger, borderColor: "#F0D3D3" }} onClick={() => handleRemoveMentor(m)}>
+                        <Trash2 size={12} /> Remove
+                      </GhostButton>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {amHead && (
+          <form onSubmit={handleAddMentor} style={{ border: `1px dashed ${C.line}`, borderRadius: 14, padding: 16, marginBottom: 48 }}>
+            <p className="tn-body" style={{ fontSize: 13, fontWeight: 600, margin: "0 0 8px" }}>Add a coding mentor</p>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <input
+                value={mentorEmail}
+                onChange={(e) => setMentorEmail(e.target.value)}
+                placeholder="Email they signed up with"
+                type="email"
+                className="tn-body"
+                style={{ ...inputStyle, flex: "1 1 240px", width: "auto" }}
+              />
+              <PrimaryButton small disabled={mentorBusy}>{mentorBusy ? "Adding…" : "Add mentor"}</PrimaryButton>
+            </div>
+            {mentorError && <p className="tn-body" style={{ fontSize: 13, color: C.danger, margin: "8px 0 0" }}>{mentorError}</p>}
+          </form>
+        )}
+
         <p className="tn-display" style={{ fontSize: 17, fontWeight: 700, margin: "0 0 16px" }}>Fellows from this campus</p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 48 }}>
           {fellows.map((f) => (
             <div key={f.id} onClick={() => openFellow(f.id)} style={{ cursor: "pointer", border: `1px solid ${C.line}`, borderRadius: 12, padding: 14, textAlign: "center" }}>
-              <Avatar name={f.name} size={40} hue={campus.hue} />
+              <Avatar name={f.name} size={40} hue={campus.hue} photo={f.avatarUrl} />
               <p className="tn-body" style={{ fontSize: 12.5, fontWeight: 600, margin: "8px 0 0" }}>{f.name}</p>
             </div>
           ))}
         </div>
+        {fellows.length === 0 && <p className="tn-body" style={{ fontSize: 13.5, color: C.slateLight, margin: "-32px 0 48px" }}>No fellows have joined this campus yet.</p>}
 
         <p className="tn-display" style={{ fontSize: 17, fontWeight: 700, margin: "0 0 16px" }}>Projects from this campus</p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-          {projects.map((p) => (
-            <div key={p.id} onClick={() => openProject(p.id)} style={{ cursor: "pointer", border: `1px solid ${C.line}`, borderRadius: 14, padding: 16 }}>
-              <p className="tn-display" style={{ fontWeight: 700, fontSize: 14, margin: "0 0 4px" }}>{p.title}</p>
-              <p className="tn-body" style={{ fontSize: 12.5, color: C.slateLight, margin: 0 }}>{p.category} · {p.status}</p>
-            </div>
-          ))}
-        </div>
+        {loadingProjects ? (
+          <p className="tn-body" style={{ fontSize: 13.5, color: C.slateLight }}>Loading…</p>
+        ) : projects.length === 0 ? (
+          <p className="tn-body" style={{ fontSize: 13.5, color: C.slateLight }}>No projects from this campus yet.</p>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+            {projects.map((p) => (
+              <div key={p.id} onClick={() => openProject(p.id)} style={{ cursor: "pointer", border: `1px solid ${C.line}`, borderRadius: 14, padding: 16 }}>
+                <p className="tn-display" style={{ fontWeight: 700, fontSize: 14, margin: "0 0 4px" }}>{p.title}</p>
+                <p className="tn-body" style={{ fontSize: 12.5, color: C.slateLight, margin: 0 }}>{p.category} · {p.status}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1075,6 +1270,7 @@ function AboutPage({ go }) {
 
 function AuthPage({ mode, go }) {
   const [fullName, setFullName] = useState("");
+  const [discordName, setDiscordName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -1091,7 +1287,7 @@ function AuthPage({ mode, go }) {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { full_name: fullName } },
+        options: { data: { full_name: fullName, discord_username: discordName.trim() } },
       });
       setLoading(false);
       if (error) {
@@ -1130,6 +1326,16 @@ function AuthPage({ mode, go }) {
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
             placeholder="Full name"
+            required
+            className="tn-body"
+            style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${C.line}`, fontSize: 14 }}
+          />
+        )}
+        {mode === "signup" && (
+          <input
+            value={discordName}
+            onChange={(e) => setDiscordName(e.target.value)}
+            placeholder="Discord username (e.g. amakaobi)"
             required
             className="tn-body"
             style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${C.line}`, fontSize: 14 }}
@@ -1176,7 +1382,7 @@ function AuthPage({ mode, go }) {
 
 /* -------------------------------- fellow dashboard ------------------------------- */
 
-function FellowDashboard({ go, openProject, onEdit, onProjectDeleted, session, profile }) {
+function FellowDashboard({ go, openProject, onEdit, onProjectDeleted, session, profile, isMentor }) {
   const [myProjects, setMyProjects] = useState([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
@@ -1227,13 +1433,17 @@ function FellowDashboard({ go, openProject, onEdit, onProjectDeleted, session, p
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 24px 96px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 32, flexWrap: "wrap", gap: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <Avatar name={displayName} size={54} hue={C.teal} />
+          <Avatar name={displayName} size={54} hue={C.teal} photo={profile?.avatar_url} />
           <div>
             <p className="tn-display" style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Welcome back, {firstName}</p>
             <p className="tn-body" style={{ fontSize: 13, color: C.slateLight, margin: 0 }}>{profile?.title || "Fellow"}{profile?.campus_id ? "" : " · No campus set yet"}</p>
           </div>
         </div>
-        <PrimaryButton onClick={() => { onEdit?.(null); go("submit"); }}><Plus size={15} /> Submit a project</PrimaryButton>
+        <div style={{ display: "flex", gap: 10 }}>
+          {isMentor && <GhostButton onClick={() => go("review")}><Sparkles size={14} /> Review submissions</GhostButton>}
+          <GhostButton onClick={() => go("editProfile")}><Pencil size={14} /> Edit profile</GhostButton>
+          <PrimaryButton onClick={() => { onEdit?.(null); go("submit"); }}><Plus size={15} /> Submit a project</PrimaryButton>
+        </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 40 }}>
@@ -1604,6 +1814,293 @@ function SubmitProjectPage({ go, session, onSubmitted, editId }) {
   );
 }
 
+/* ------------------------------------- review submissions -------------------------------------- */
+
+// Where Heads of Campus and Coding Mentors approve (or hide) projects that
+// fellows submitted under their campus. The database enforces who is allowed.
+function ReviewPage({ go, openProject, myMentorships, onChanged }) {
+  const [rows, setRows] = useState([]);
+  const [names, setNames] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState(null);
+  const [error, setError] = useState("");
+
+  const campusIds = myMentorships.map((m) => m.campus_id);
+
+  const load = () => {
+    if (campusIds.length === 0) {
+      setLoading(false);
+      return;
+    }
+    supabase
+      .from("projects")
+      .select("*")
+      .in("campus_id", campusIds)
+      .order("created_at", { ascending: false })
+      .then(async ({ data, error: loadError }) => {
+        setLoading(false);
+        if (loadError) {
+          setError(loadError.message);
+          return;
+        }
+        const list = data || [];
+        setRows(list);
+        const ids = Array.from(new Set(list.map((p) => p.created_by).filter(Boolean)));
+        if (ids.length > 0) {
+          const { data: profs } = await supabase.from("profiles").select("id, full_name").in("id", ids);
+          const map = {};
+          (profs || []).forEach((p) => { map[p.id] = p.full_name; });
+          setNames(map);
+        }
+      });
+  };
+  useEffect(load, [campusIds.join(",")]);
+
+  const setApproved = async (p, value) => {
+    setError("");
+    setBusyId(p.id);
+    const { error: updateError } = await supabase.from("projects").update({ approved: value }).eq("id", p.id);
+    setBusyId(null);
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+    setRows((cur) => cur.map((r) => (r.id === p.id ? { ...r, approved: value } : r)));
+    onChanged?.();
+  };
+
+  const pending = rows.filter((r) => !r.approved);
+  const approved = rows.filter((r) => r.approved);
+
+  const renderRow = (p, isPending) => {
+    const campus = CAMPUSES.find((c) => c.dbId === p.campus_id);
+    return (
+      <div key={p.id} style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 16, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+        <div style={{ cursor: "pointer", flex: "1 1 280px" }} onClick={() => openProject(p.id)}>
+          <p className="tn-display" style={{ fontWeight: 700, fontSize: 14.5, margin: "0 0 3px" }}>{p.title}</p>
+          <p className="tn-body" style={{ fontSize: 12.5, color: C.slateLight, margin: "0 0 4px" }}>
+            {names[p.created_by] || "A fellow"} · {campus?.name || "Campus"} · {p.category}
+          </p>
+          <p className="tn-body" style={{ fontSize: 13, color: C.slate, margin: 0 }}>{p.short_description}</p>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <GhostButton small onClick={() => openProject(p.id)}>View</GhostButton>
+          {isPending ? (
+            <PrimaryButton small disabled={busyId === p.id} onClick={() => setApproved(p, true)}>
+              {busyId === p.id ? "Approving…" : "Approve"}
+            </PrimaryButton>
+          ) : (
+            <GhostButton small disabled={busyId === p.id} onClick={() => setApproved(p, false)}>Hide from Explore</GhostButton>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ maxWidth: 900, margin: "0 auto", padding: "40px 24px 96px" }}>
+      <GhostButton small onClick={() => go("dashboard")} style={{ marginBottom: 24 }}><ArrowLeft size={14} /> Back to dashboard</GhostButton>
+      <SectionHeading eyebrow="Mentor tools" title="Review submissions" sub="Approve projects from your campus. Approved projects appear on Explore projects right away." />
+      {error && <p className="tn-body" style={{ fontSize: 13, color: C.danger }}>{error}</p>}
+      {loading ? (
+        <p className="tn-body" style={{ fontSize: 13.5, color: C.slateLight }}>Loading…</p>
+      ) : campusIds.length === 0 ? (
+        <p className="tn-body" style={{ fontSize: 13.5, color: C.slateLight }}>You aren't a mentor for any campus yet.</p>
+      ) : (
+        <>
+          <p className="tn-display" style={{ fontSize: 15, fontWeight: 700, margin: "0 0 12px" }}>Waiting for approval ({pending.length})</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 40 }}>
+            {pending.length === 0 ? (
+              <p className="tn-body" style={{ fontSize: 13.5, color: C.slateLight }}>Nothing waiting. You're all caught up.</p>
+            ) : pending.map((p) => renderRow(p, true))}
+          </div>
+          <p className="tn-display" style={{ fontSize: 15, fontWeight: 700, margin: "0 0 12px" }}>Approved ({approved.length})</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {approved.map((p) => renderRow(p, false))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------- edit profile -------------------------------------- */
+
+function EditProfilePage({ go, session, profile, onSaved }) {
+  const [fullName, setFullName] = useState("");
+  const [userName, setUserName] = useState("");
+  const [discordName, setDiscordName] = useState("");
+  const [title, setTitle] = useState("");
+  const [city, setCity] = useState("");
+  const [campusSlug, setCampusSlug] = useState("");
+  const [bio, setBio] = useState("");
+  const [skillsText, setSkillsText] = useState("");
+  const [linkedinUrl, setLinkedinUrl] = useState("");
+  const [githubUrl, setGithubUrl] = useState("");
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const [existingPhotoUrl, setExistingPhotoUrl] = useState(null);
+  const [showPhoto, setShowPhoto] = useState(false);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const handlePhotoChange = (e) => {
+    const file = e.target.files[0];
+    setPhotoFile(file || null);
+    setPhotoPreview(file ? URL.createObjectURL(file) : null);
+  };
+
+  // Fill the form from whatever's already on the profile the first time it
+  // becomes available (App loads it once on login, so this runs once).
+  useEffect(() => {
+    if (!profile) return;
+    setFullName(profile.full_name || "");
+    setUserName(profile.user_name || "");
+    setTitle(profile.title || "");
+    setCity(profile.city || "");
+    const campus = CAMPUSES.find((c) => c.dbId === profile.campus_id);
+    setCampusSlug(campus?.id || "");
+    setBio(profile.bio || "");
+    setSkillsText((profile.skills || []).join(", "));
+    setLinkedinUrl(profile.linkedin_url || "");
+    setGithubUrl(profile.github_url || "");
+    setExistingPhotoUrl(profile.avatar_url || null);
+    // Discord username lives in a private table (only you can read it).
+    supabase
+      .from("member_private")
+      .select("discord_username")
+      .eq("user_id", profile.id)
+      .maybeSingle()
+      .then(({ data }) => setDiscordName(data?.discord_username || ""));
+  }, [profile?.id]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    if (!fullName) {
+      setError("Please enter your name.");
+      return;
+    }
+    const campus = CAMPUSES.find((c) => c.id === campusSlug);
+    setSaving(true);
+
+    // Upload a new profile picture if one was chosen (reuses the existing
+    // public "project_image" bucket, with an "avatar-" filename prefix).
+    let avatarUrl = existingPhotoUrl;
+    if (photoFile) {
+      const fileExt = photoFile.name.split(".").pop();
+      const fileName = `avatar-${session.user.id}-${Date.now()}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage.from("project_image").upload(fileName, photoFile);
+      if (uploadError) {
+        setSaving(false);
+        setError(`Picture upload failed: ${uploadError.message}`);
+        return;
+      }
+      const { data: urlData } = supabase.storage.from("project_image").getPublicUrl(fileName);
+      avatarUrl = urlData.publicUrl;
+    }
+
+    const { error: saveError } = await supabase
+      .from("profiles")
+      .update({
+        avatar_url: avatarUrl,
+        full_name: fullName,
+        user_name: userName || null,
+        title: title || null,
+        city: city || null,
+        campus_id: campus?.dbId || null,
+        bio: bio || null,
+        skills: skillsText.split(",").map((s) => s.trim()).filter(Boolean),
+        linkedin_url: linkedinUrl || null,
+        github_url: githubUrl || null,
+      })
+      .eq("id", session.user.id);
+    if (!saveError) {
+      const { error: privError } = await supabase
+        .from("member_private")
+        .upsert({ user_id: session.user.id, discord_username: discordName.trim() || null });
+      if (privError) {
+        setSaving(false);
+        setError(`Profile saved, but Discord username failed: ${privError.message}`);
+        return;
+      }
+    }
+    setSaving(false);
+    if (saveError) {
+      setError(saveError.message);
+      return;
+    }
+    onSaved?.();
+    go("dashboard");
+  };
+
+  return (
+    <div style={{ maxWidth: 700, margin: "0 auto", padding: "40px 24px 96px" }}>
+      <SectionHeading eyebrow="Your profile" title="Edit profile" sub="This is what other fellows see when they look you up." />
+      <form onSubmit={handleSubmit} style={{ border: `1px solid ${C.line}`, borderRadius: 16, padding: 28, display: "flex", flexDirection: "column", gap: 18 }}>
+        <Field label="Profile picture">
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <div
+              onClick={() => (photoPreview || existingPhotoUrl) && setShowPhoto(true)}
+              style={{ cursor: (photoPreview || existingPhotoUrl) ? "zoom-in" : "default" }}
+            >
+              <Avatar name={fullName || "Fellow"} size={140} hue={C.teal} photo={photoPreview || existingPhotoUrl} />
+            </div>
+            {showPhoto && <PhotoLightbox src={photoPreview || existingPhotoUrl} onClose={() => setShowPhoto(false)} />}
+            <input type="file" accept="image/*" onChange={handlePhotoChange} className="tn-body" style={{ fontSize: 13.5 }} />
+          </div>
+        </Field>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <Field label="Full name *">
+            <input value={fullName} onChange={(e) => setFullName(e.target.value)} className="tn-body" style={inputStyle} />
+          </Field>
+          <Field label="Username">
+            <input value={userName} onChange={(e) => setUserName(e.target.value)} placeholder="e.g. amakaobi" className="tn-body" style={inputStyle} />
+          </Field>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <Field label="Title">
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Frontend Engineer" className="tn-body" style={inputStyle} />
+          </Field>
+          <Field label="City">
+            <input value={city} onChange={(e) => setCity(e.target.value)} className="tn-body" style={inputStyle} />
+          </Field>
+        </div>
+        <Field label="Campus">
+          <select value={campusSlug} onChange={(e) => setCampusSlug(e.target.value)} className="tn-body" style={inputStyle}>
+            <option value="">Select a campus</option>
+            {CAMPUSES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </Field>
+        <Field label="Discord username (private, used for notifications)">
+          <input value={discordName} onChange={(e) => setDiscordName(e.target.value)} placeholder="e.g. amakaobi" className="tn-body" style={inputStyle} />
+        </Field>
+        <Field label="Bio">
+          <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={4} className="tn-body" style={{ ...inputStyle, resize: "vertical" }} />
+        </Field>
+        <Field label="Skills (comma-separated)">
+          <input value={skillsText} onChange={(e) => setSkillsText(e.target.value)} placeholder="React, Node.js, Figma" className="tn-body" style={inputStyle} />
+        </Field>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <Field label="LinkedIn link">
+            <input value={linkedinUrl} onChange={(e) => setLinkedinUrl(e.target.value)} placeholder="https://linkedin.com/in/…" className="tn-body" style={inputStyle} />
+          </Field>
+          <Field label="GitHub link">
+            <input value={githubUrl} onChange={(e) => setGithubUrl(e.target.value)} placeholder="https://github.com/…" className="tn-body" style={inputStyle} />
+          </Field>
+        </div>
+
+        {error && <p className="tn-body" style={{ fontSize: 13, color: C.danger, margin: 0 }}>{error}</p>}
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
+          <GhostButton small onClick={() => go("dashboard")}>Cancel</GhostButton>
+          <PrimaryButton small disabled={saving}>{saving ? "Saving…" : "Save profile"}</PrimaryButton>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 /* ------------------------------------- app -------------------------------------- */
 
 export default function App() {
@@ -1633,7 +2130,7 @@ export default function App() {
   }, []);
 
   // Whenever the session changes, load (or clear) the matching profile row.
-  useEffect(() => {
+  const fetchProfile = () => {
     if (!session) {
       setProfile(null);
       return;
@@ -1650,7 +2147,50 @@ export default function App() {
         }
         setProfile(data);
       });
+  };
+  useEffect(fetchProfile, [session]);
+
+  // Signup can't save the Discord username directly (there's no session yet
+  // if email confirmation is on), so copy it from the signup details into the
+  // private table the first time the person is logged in.
+  useEffect(() => {
+    const fromSignup = session?.user?.user_metadata?.discord_username;
+    if (!session || !fromSignup) return;
+    supabase
+      .from("member_private")
+      .select("user_id")
+      .eq("user_id", session.user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data) {
+          supabase
+            .from("member_private")
+            .upsert({ user_id: session.user.id, discord_username: fromSignup })
+            .then(() => {});
+        }
+      });
   }, [session]);
+
+  // Which campuses is the logged-in person a mentor (or Head) of?
+  const [myMentorships, setMyMentorships] = useState([]);
+  const fetchMyMentorships = () => {
+    if (!session) {
+      setMyMentorships([]);
+      return;
+    }
+    supabase
+      .from("campus_mentors")
+      .select("campus_id, is_head")
+      .eq("user_id", session.user.id)
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("Failed to load mentorships:", error);
+          return;
+        }
+        setMyMentorships(data || []);
+      });
+  };
+  useEffect(fetchMyMentorships, [session]);
 
   const role = !session ? "visitor" : (profile?.role === "administrator" || profile?.role === "super_administrator") ? "admin" : "fellow";
   const displayName = profile?.full_name || session?.user?.email;
@@ -1658,7 +2198,7 @@ export default function App() {
 
   // If someone logs out while on a fellow/admin-only page, send them home.
   useEffect(() => {
-    if (role === "visitor" && ["dashboard", "admin", "submit"].includes(view)) {
+    if (role === "visitor" && ["dashboard", "admin", "submit", "editProfile", "review"].includes(view)) {
       setView("home");
     }
   }, [role, view]);
@@ -1731,7 +2271,18 @@ export default function App() {
   const [fellows, setFellows] = useState([]);
   const [loadingFellows, setLoadingFellows] = useState(true);
   const [projectCounts, setProjectCounts] = useState({});
-  useEffect(() => {
+  const [allProjectsLite, setAllProjectsLite] = useState([]);
+
+  // Real per-campus totals (by campus slug) for the home page, the campuses
+  // list and the campus pages.
+  const campusStats = { fellows: {}, projects: {}, totalFellows: fellows.length, totalProjects: allProjectsLite.length };
+  fellows.forEach((f) => { if (f.campusId) campusStats.fellows[f.campusId] = (campusStats.fellows[f.campusId] || 0) + 1; });
+  allProjectsLite.forEach((p) => {
+    const c = CAMPUSES.find((x) => x.dbId === p.campus_id);
+    if (c) campusStats.projects[c.id] = (campusStats.projects[c.id] || 0) + 1;
+  });
+
+  const fetchFellows = () => {
     supabase
       .from("profiles")
       .select("*")
@@ -1748,6 +2299,8 @@ export default function App() {
             return {
               id: row.id,
               name: row.full_name || "Fellow",
+              userName: row.user_name || null,
+              avatarUrl: row.avatar_url || null,
               title: row.title || "Fellow",
               city: row.city || "",
               campusId: campus?.id || null,
@@ -1762,12 +2315,13 @@ export default function App() {
 
     supabase
       .from("projects")
-      .select("id, created_by")
+      .select("id, created_by, campus_id")
       .then(({ data, error }) => {
         if (error) {
           console.error("Failed to load project counts:", error);
           return;
         }
+        setAllProjectsLite(data || []);
         const counts = {};
         (data || []).forEach((row) => {
           if (!row.created_by) return;
@@ -1775,7 +2329,8 @@ export default function App() {
         });
         setProjectCounts(counts);
       });
-  }, []);
+  };
+  useEffect(fetchFellows, []);
 
   const [recentProjects, setRecentProjects] = useState([]);
   const mapProjectRow = (row) => {
@@ -1800,12 +2355,37 @@ export default function App() {
       github: row.github_url || "#",
       demo: row.demo_url || "#",
       cover: row.cover_image_url || null,
+      createdAt: row.created_at || null,
     };
   };
+
+  // Projects shown on Explore: only ones a campus mentor has approved.
+  const [exploreProjects, setExploreProjects] = useState([]);
+  const [loadingExplore, setLoadingExplore] = useState(true);
+  const fetchExploreProjects = () => {
+    supabase
+      .from("projects")
+      .select("*")
+      .eq("approved", true)
+      .order("created_at", { ascending: false })
+      .then(({ data, error }) => {
+        setLoadingExplore(false);
+        if (error) {
+          console.error("Failed to load projects for Explore:", error);
+          return;
+        }
+        setExploreProjects((data || []).map(mapProjectRow));
+      });
+  };
+  useEffect(() => {
+    if (view === "explore") fetchExploreProjects();
+  }, [view]);
+
   const fetchRecentProjects = () => {
     supabase
       .from("projects")
       .select("*")
+      .eq("approved", true)
       .order("created_at", { ascending: false })
       .limit(6)
       .then(({ data, error }) => {
@@ -1828,7 +2408,8 @@ export default function App() {
     if (view !== "project" || !selectedId) return;
     const already =
       PROJECTS.find((p) => p.id === selectedId) ||
-      recentProjects.find((p) => p.id === selectedId);
+      recentProjects.find((p) => p.id === selectedId) ||
+      exploreProjects.find((p) => p.id === selectedId);
     if (already) {
       setFetchedProject(null);
       return;
@@ -1846,7 +2427,7 @@ export default function App() {
         }
         setFetchedProject(mapProjectRow(data));
       });
-  }, [view, selectedId, recentProjects]);
+  }, [view, selectedId, recentProjects, exploreProjects]);
 
   const go = (v, id) => {
     setView(v);
@@ -1866,7 +2447,11 @@ export default function App() {
   const onLike = toggleSet(setLiked);
   const onBookmark = toggleSet(setBookmarked);
 
-  const project = PROJECTS.find((p) => p.id === selectedId) || recentProjects.find((p) => p.id === selectedId) || fetchedProject;
+  const project =
+    PROJECTS.find((p) => p.id === selectedId) ||
+    recentProjects.find((p) => p.id === selectedId) ||
+    exploreProjects.find((p) => p.id === selectedId) ||
+    (fetchedProject?.id === selectedId ? fetchedProject : null);
   const fellow = fellows.find((f) => f.id === selectedId);
   const campus = getCampus(selectedId);
   const anchor = ANCHORS.find((a) => a.id === selectedId);
@@ -1874,21 +2459,37 @@ export default function App() {
   return (
     <div className="tn-body" style={{ background: C.paper, minHeight: "100vh" }}>
       <style>{FONTS}</style>
-      <NavBar view={view} go={go} role={role} displayName={displayName} onLogout={handleLogout} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
+      <NavBar view={view} go={go} role={role} displayName={displayName} avatarUrl={profile?.avatar_url} onLogout={handleLogout} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
 
-      {view === "home" && <HomePage go={go} openProject={openProject} liked={liked} bookmarked={bookmarked} onLike={onLike} onBookmark={onBookmark} recentProjects={recentProjects} />}
-      {view === "explore" && <ExplorePage go={go} openProject={openProject} liked={liked} bookmarked={bookmarked} onLike={onLike} onBookmark={onBookmark} />}
+      {view === "home" && <HomePage go={go} openProject={openProject} liked={liked} bookmarked={bookmarked} onLike={onLike} onBookmark={onBookmark} recentProjects={recentProjects} campusStats={campusStats} />}
+      {view === "explore" && <ExplorePage go={go} openProject={openProject} liked={liked} bookmarked={bookmarked} onLike={onLike} onBookmark={onBookmark} projects={exploreProjects} loading={loadingExplore} />}
       {view === "project" && <ProjectDetailPage project={project} go={go} openFellow={openFellow} liked={liked} bookmarked={bookmarked} onLike={onLike} onBookmark={onBookmark} />}
       {view === "fellows" && <FellowsPage go={go} openFellow={openFellow} fellows={fellows} projectCounts={projectCounts} loadingFellows={loadingFellows} />}
       {view === "fellow" && <FellowProfilePage fellow={fellow} go={go} openProject={openProject} />}
-      {view === "campuses" && <CampusesPage go={go} />}
-      {view === "campus" && <CampusDetailPage campus={campus} go={go} openFellow={openFellow} openProject={openProject} />}
+      {view === "campuses" && <CampusesPage go={go} campusStats={campusStats} />}
+      {view === "campus" && <CampusDetailPage campus={campus} go={go} openFellow={openFellow} openProject={openProject} allFellows={fellows} myMentorships={myMentorships} onMentorsChanged={fetchMyMentorships} />}
       {view === "anchors" && <AnchorsPage go={go} openAnchor={openAnchor} />}
       {view === "anchor" && <AnchorDetailPage anchor={anchor} go={go} />}
       {view === "about" && <AboutPage go={go} />}
       {view === "login" && <AuthPage mode="login" go={go} />}
       {view === "signup" && <AuthPage mode="signup" go={go} />}
-      {view === "dashboard" && <FellowDashboard go={go} openProject={openProject} onEdit={setEditingProjectId} onProjectDeleted={fetchRecentProjects} session={session} profile={profile} />}
+      {view === "dashboard" && <FellowDashboard go={go} openProject={openProject} onEdit={setEditingProjectId} onProjectDeleted={fetchRecentProjects} session={session} profile={profile} isMentor={myMentorships.length > 0} />}
+      {view === "review" && (
+        <ReviewPage
+          go={go}
+          openProject={openProject}
+          myMentorships={myMentorships}
+          onChanged={() => { fetchRecentProjects(); fetchFellows(); }}
+        />
+      )}
+      {view === "editProfile" && (
+        <EditProfilePage
+          go={go}
+          session={session}
+          profile={profile}
+          onSaved={() => { fetchProfile(); fetchFellows(); }}
+        />
+      )}
       {view === "admin" && <AdminDashboard />}
       {view === "submit" && (
         <SubmitProjectPage
