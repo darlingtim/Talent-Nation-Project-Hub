@@ -1053,7 +1053,7 @@ function CampusDetailPage({ campus, go, openFellow, openProject, allFellows, myM
   }, [campus?.dbId]);
 
   if (!campus) return null;
-  const fellows = allFellows.filter((f) => f.campusId === campus.id);
+  const fellows = allFellows.filter((f) => f.campusId === campus.id && !f.isMentor);
   return (
     <div>
       <div style={{ background: `linear-gradient(135deg, ${campus.hue}, ${C.ink})`, padding: "56px 24px" }}>
@@ -1271,6 +1271,7 @@ function AboutPage({ go }) {
 function AuthPage({ mode, go }) {
   const [fullName, setFullName] = useState("");
   const [discordName, setDiscordName] = useState("");
+  const [memberType, setMemberType] = useState("fellow");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -1287,7 +1288,7 @@ function AuthPage({ mode, go }) {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { full_name: fullName, discord_username: discordName.trim() } },
+        options: { data: { full_name: fullName, discord_username: discordName.trim(), member_type: memberType } },
       });
       setLoading(false);
       if (error) {
@@ -1315,12 +1316,32 @@ function AuthPage({ mode, go }) {
   return (
     <div style={{ maxWidth: 420, margin: "0 auto", padding: "80px 24px 96px" }}>
       <h1 className="tn-display" style={{ fontSize: 26, fontWeight: 700, textAlign: "center", margin: "0 0 8px" }}>
-        {mode === "login" ? "Log in to your account" : "Create your fellow account"}
+        {mode === "login" ? "Log in to your account" : memberType === "mentor" ? "Create your mentor account" : "Create your fellow account"}
       </h1>
       <p className="tn-body" style={{ fontSize: 13.5, color: C.slateLight, textAlign: "center", margin: "0 0 32px" }}>
         {mode === "login" ? "Welcome back." : "Join the Talent Nation Project Hub."}
       </p>
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {mode === "signup" && (
+          <div style={{ display: "flex", gap: 10 }}>
+            {[["fellow", "I'm a Fellow"], ["mentor", "I'm a Mentor"]].map(([val, label]) => (
+              <button
+                key={val}
+                type="button"
+                onClick={() => setMemberType(val)}
+                className="tn-body"
+                style={{
+                  flex: 1, padding: "12px 14px", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer",
+                  border: `1.5px solid ${memberType === val ? C.teal : C.line}`,
+                  background: memberType === val ? C.tealPale : C.white,
+                  color: memberType === val ? C.tealDeep : C.slate,
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
         {mode === "signup" && (
           <input
             value={fullName}
@@ -1436,7 +1457,7 @@ function FellowDashboard({ go, openProject, onEdit, onProjectDeleted, session, p
           <Avatar name={displayName} size={54} hue={C.teal} photo={profile?.avatar_url} />
           <div>
             <p className="tn-display" style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Welcome back, {firstName}</p>
-            <p className="tn-body" style={{ fontSize: 13, color: C.slateLight, margin: 0 }}>{profile?.title || "Fellow"}{profile?.campus_id ? "" : " · No campus set yet"}</p>
+            <p className="tn-body" style={{ fontSize: 13, color: C.slateLight, margin: 0 }}>{(isMentor ? (profile?.title || "Mentor") : "Fellow")}{profile?.campus_id ? "" : " · No campus set yet"}</p>
           </div>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
@@ -1926,7 +1947,7 @@ function ReviewPage({ go, openProject, myMentorships, onChanged }) {
 
 /* ------------------------------------- edit profile -------------------------------------- */
 
-function EditProfilePage({ go, session, profile, onSaved }) {
+function EditProfilePage({ go, session, profile, onSaved, isMentor }) {
   const [fullName, setFullName] = useState("");
   const [userName, setUserName] = useState("");
   const [discordName, setDiscordName] = useState("");
@@ -1943,6 +1964,23 @@ function EditProfilePage({ go, session, profile, onSaved }) {
   const [showPhoto, setShowPhoto] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  const handleDeleteAccount = async () => {
+    setDeleteError("");
+    setDeleting(true);
+    const { error: rpcError } = await supabase.rpc("delete_my_account");
+    if (rpcError) {
+      setDeleting(false);
+      setDeleteError(`Could not delete your account: ${rpcError.message}`);
+      return;
+    }
+    await supabase.auth.signOut();
+    window.location.reload(); // start fresh on the home page
+  };
 
   const handlePhotoChange = (e) => {
     const file = e.target.files[0];
@@ -2006,7 +2044,7 @@ function EditProfilePage({ go, session, profile, onSaved }) {
         avatar_url: avatarUrl,
         full_name: fullName,
         user_name: userName || null,
-        title: title || null,
+        ...(isMentor ? { title: title || null } : {}),
         city: city || null,
         campus_id: campus?.dbId || null,
         bio: bio || null,
@@ -2058,10 +2096,12 @@ function EditProfilePage({ go, session, profile, onSaved }) {
             <input value={userName} onChange={(e) => setUserName(e.target.value)} placeholder="e.g. amakaobi" className="tn-body" style={inputStyle} />
           </Field>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          <Field label="Title">
-            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Frontend Engineer" className="tn-body" style={inputStyle} />
-          </Field>
+        <div style={{ display: "grid", gridTemplateColumns: isMentor ? "1fr 1fr" : "1fr", gap: 14 }}>
+          {isMentor && (
+            <Field label="Title">
+              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Senior Software Engineer" className="tn-body" style={inputStyle} />
+            </Field>
+          )}
           <Field label="City">
             <input value={city} onChange={(e) => setCity(e.target.value)} className="tn-body" style={inputStyle} />
           </Field>
@@ -2097,6 +2137,36 @@ function EditProfilePage({ go, session, profile, onSaved }) {
           <PrimaryButton small disabled={saving}>{saving ? "Saving…" : "Save profile"}</PrimaryButton>
         </div>
       </form>
+
+      <div style={{ marginTop: 40, paddingTop: 24, borderTop: `1px solid ${C.line}` }}>
+        <p className="tn-display" style={{ fontSize: 15, fontWeight: 700, color: C.danger, margin: "0 0 6px" }}>Delete account</p>
+        <p className="tn-body" style={{ fontSize: 13, color: C.slate, margin: "0 0 14px" }}>
+          This permanently removes your profile, your projects and your login. It cannot be undone.
+        </p>
+        {!showDelete ? (
+          <GhostButton small onClick={() => setShowDelete(true)} style={{ color: C.danger, borderColor: C.danger }}>Delete my account…</GhostButton>
+        ) : (
+          <div style={{ border: `1px solid ${C.danger}`, background: C.dangerPale, borderRadius: 12, padding: 16 }}>
+            <p className="tn-body" style={{ fontSize: 13, color: C.slate, margin: "0 0 10px" }}>
+              Type <b>DELETE</b> to confirm.
+            </p>
+            <input
+              value={deleteConfirm}
+              onChange={(e) => setDeleteConfirm(e.target.value)}
+              placeholder="DELETE"
+              className="tn-body"
+              style={{ ...inputStyle, marginBottom: 12 }}
+            />
+            {deleteError && <p className="tn-body" style={{ fontSize: 13, color: C.danger, margin: "0 0 10px" }}>{deleteError}</p>}
+            <div style={{ display: "flex", gap: 10 }}>
+              <GhostButton small onClick={() => { setShowDelete(false); setDeleteConfirm(""); setDeleteError(""); }}>Cancel</GhostButton>
+              <GhostButton small disabled={deleteConfirm !== "DELETE" || deleting} onClick={handleDeleteAccount} style={{ color: C.danger, borderColor: C.danger }}>
+                {deleting ? "Deleting…" : "Permanently delete"}
+              </GhostButton>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -2192,6 +2262,25 @@ export default function App() {
   };
   useEffect(fetchMyMentorships, [session]);
 
+  // A "mentor" is anyone who signed up as one, or who a Head added to a campus.
+  const isMentorUser = profile?.member_type === "mentor" || myMentorships.length > 0;
+
+  // The Fellow/Mentor choice made at signup travels in the signup details;
+  // copy it onto the profile once the profile exists.
+  useEffect(() => {
+    const chosen = session?.user?.user_metadata?.member_type;
+    if (!session || !profile || chosen !== "mentor" || profile.member_type === "mentor") return;
+    supabase
+      .from("profiles")
+      .update({ member_type: "mentor" })
+      .eq("id", session.user.id)
+      .then(({ error }) => {
+        if (error) { console.error("Failed to save member type:", error); return; }
+        fetchProfile();
+        fetchFellows();
+      });
+  }, [session, profile?.id, profile?.member_type]);
+
   const role = !session ? "visitor" : (profile?.role === "administrator" || profile?.role === "super_administrator") ? "admin" : "fellow";
   const displayName = profile?.full_name || session?.user?.email;
   const handleLogout = () => supabase.auth.signOut();
@@ -2275,18 +2364,19 @@ export default function App() {
 
   // Real per-campus totals (by campus slug) for the home page, the campuses
   // list and the campus pages.
-  const campusStats = { fellows: {}, projects: {}, totalFellows: fellows.length, totalProjects: allProjectsLite.length };
-  fellows.forEach((f) => { if (f.campusId) campusStats.fellows[f.campusId] = (campusStats.fellows[f.campusId] || 0) + 1; });
+  const campusStats = { fellows: {}, projects: {}, totalFellows: fellows.filter((f) => !f.isMentor).length, totalProjects: allProjectsLite.length };
+  fellows.forEach((f) => { if (f.campusId && !f.isMentor) campusStats.fellows[f.campusId] = (campusStats.fellows[f.campusId] || 0) + 1; });
   allProjectsLite.forEach((p) => {
     const c = CAMPUSES.find((x) => x.dbId === p.campus_id);
     if (c) campusStats.projects[c.id] = (campusStats.projects[c.id] || 0) + 1;
   });
 
   const fetchFellows = () => {
-    supabase
-      .from("profiles")
-      .select("*")
-      .then(({ data, error }) => {
+    Promise.all([
+      supabase.from("profiles").select("*"),
+      supabase.from("campus_mentors").select("user_id"),
+    ]).then(([{ data, error }, mentorRes]) => {
+        const mentorIds = new Set((mentorRes.data || []).map((m) => m.user_id));
         setLoadingFellows(false);
         if (error) {
           console.error("Failed to load fellows:", error);
@@ -2301,7 +2391,8 @@ export default function App() {
               name: row.full_name || "Fellow",
               userName: row.user_name || null,
               avatarUrl: row.avatar_url || null,
-              title: row.title || "Fellow",
+              isMentor: row.member_type === "mentor" || mentorIds.has(row.id),
+              title: (row.member_type === "mentor" || mentorIds.has(row.id)) ? (row.title || "Mentor") : "Fellow",
               city: row.city || "",
               campusId: campus?.id || null,
               skills: row.skills || [],
@@ -2473,7 +2564,7 @@ export default function App() {
       {view === "about" && <AboutPage go={go} />}
       {view === "login" && <AuthPage mode="login" go={go} />}
       {view === "signup" && <AuthPage mode="signup" go={go} />}
-      {view === "dashboard" && <FellowDashboard go={go} openProject={openProject} onEdit={setEditingProjectId} onProjectDeleted={fetchRecentProjects} session={session} profile={profile} isMentor={myMentorships.length > 0} />}
+      {view === "dashboard" && <FellowDashboard go={go} openProject={openProject} onEdit={setEditingProjectId} onProjectDeleted={fetchRecentProjects} session={session} profile={profile} isMentor={isMentorUser} />}
       {view === "review" && (
         <ReviewPage
           go={go}
@@ -2484,6 +2575,7 @@ export default function App() {
       )}
       {view === "editProfile" && (
         <EditProfilePage
+          isMentor={isMentorUser}
           go={go}
           session={session}
           profile={profile}
