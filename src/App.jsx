@@ -13,24 +13,14 @@ import {
 /* ---------------------------------- tokens --------------------------------- */
 
 const C = {
-  // Talent Nation palette: deep indigo-blue with an orange accent.
-  // "teal*" and "gold*" names are kept so every page picks up the new colours automatically.
-  ink: "#150C73",
-  inkSoft: "#1F1590",
-  paper: "#F5F4FD",
-  paperDeep: "#EAE8FA",
-  gold: "#F26B0F",
-  goldDeep: "#C2500A",
-  goldPale: "#FFE8D8",
-  teal: "#2A14D4",
-  tealDeep: "#1B0EA0",
-  tealPale: "#E8E6FC",
-  slate: "#45466B",
-  slateLight: "#7B7D9C",
-  line: "#E1E0F2",
-  white: "#FFFFFF",
-  danger: "#C24545",
-  dangerPale: "#FBEAEA",
+  // Talent Nation palette: exact brand blue #1B1092 (sampled from the Learn2Earn dashboard) with orange accent.
+  ink: "#1B1092", inkSoft: "#2629B7",
+  paper: "#F9F9FB", paperDeep: "#EEEEF6",
+  gold: "#FF6000", goldDeep: "#CC4D00", goldPale: "#FFEADB",
+  teal: "#1B1092", tealDeep: "#130A6B", tealPale: "#E9E7F7",
+  slate: "#45466B", slateLight: "#7B7D9C",
+  line: "#E1E1E2", white: "#FFFFFF",
+  danger: "#C24545", dangerPale: "#FBEAEA",
 };
 
 const FONTS = `
@@ -195,7 +185,7 @@ function PhotoLightbox({ src, onClose }) {
     <div
       onClick={onClose}
       style={{
-        position: "fixed", inset: 0, background: "rgba(21,12,115,0.88)", zIndex: 1000,
+        position: "fixed", inset: 0, background: "rgba(27,16,146,0.88)", zIndex: 1000,
         display: "flex", alignItems: "center", justifyContent: "center", padding: 24, cursor: "zoom-out",
       }}
     >
@@ -287,7 +277,7 @@ function ProjectCard({ project, onOpen, liked, bookmarked, onLike, onBookmark, b
         style={{
           height: big ? 200 : 130, cursor: "pointer",
           background: project.cover
-            ? `linear-gradient(to top, rgba(21,12,115,0.75), rgba(21,12,115,0.15)), url(${project.cover}) center/cover`
+            ? `linear-gradient(to top, rgba(27,16,146,0.75), rgba(27,16,146,0.15)), url(${project.cover}) center/cover`
             : `linear-gradient(135deg, ${C.ink} 0%, ${C.inkSoft} 100%)`,
           position: "relative", display: "flex", alignItems: "flex-end", padding: 16,
         }}
@@ -496,7 +486,7 @@ function HomePage({ go, openProject, liked, bookmarked, onLike, onBookmark, rece
         <div style={{
           position: "absolute", top: -180, left: "50%", transform: "translateX(-50%)",
           width: 640, height: 640, borderRadius: "50%",
-          background: `radial-gradient(circle, rgba(110,90,255,0.45) 0%, transparent 70%)`,
+          background: `radial-gradient(circle, rgba(38,41,183,0.55) 0%, transparent 70%)`,
         }} />
         <div style={{ maxWidth: 900, margin: "0 auto", padding: "96px 24px 40px", position: "relative", textAlign: "center" }}>
           <Badge tone="ink" style={{ border: "1px solid rgba(255,255,255,0.25)", marginBottom: 22 }}>
@@ -692,7 +682,7 @@ function ProjectDetailPage({ project, go, openFellow, liked, bookmarked, onLike,
       <div style={{
         borderRadius: 20,
         background: project.cover
-          ? `linear-gradient(to top, rgba(21,12,115,0.9), rgba(21,12,115,0.55)), url(${project.cover}) center/cover`
+          ? `linear-gradient(to top, rgba(27,16,146,0.9), rgba(27,16,146,0.55)), url(${project.cover}) center/cover`
           : `linear-gradient(135deg, ${C.ink}, ${C.inkSoft})`,
         padding: 40, marginBottom: 32,
       }}>
