@@ -126,7 +126,7 @@ const ANCHORS = [
     id: "daniel-okafor", name: "Daniel Okafor", role: "Co-Founder & Head of Campuses",
     tag: "Co-Founder",
     photo: "DO",
-    shortBio: "Opened and now oversees Talent Nation's five campuses, from curriculum delivery to campus-lead hiring.",
+    shortBio: "Opened and now oversees Talent Nation's Eight campuses, from curriculum delivery to campus-lead hiring.",
     background: "Previously ran regional operations for an education nonprofit across three states. Studied Education Policy.",
     expertise: ["Operations", "Campus growth", "Curriculum design"],
     contribution: "Built the campus-lead training program and the standards that keep quality consistent as Talent Nation expands.",
@@ -547,7 +547,7 @@ function HomePage({ go, openProject, liked, bookmarked, onLike, onBookmark, rece
       </div>
 
       <div style={{ maxWidth: 1180, margin: "0 auto", padding: "80px 24px 0" }}>
-        <SectionHeading eyebrow="Where fellows learn" title="Our campuses" sub="Five campuses, each with its own strengths and specialties." />
+        <SectionHeading eyebrow="Where fellows learn" title="Our campuses" sub="Eight campuses, each with its own strengths and specialties." />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 16 }}>
           {CAMPUSES.map((c) => (
             <div key={c.id} onClick={() => go("campus", c.id)} style={{ cursor: "pointer", borderRadius: 14, border: `1px solid ${C.line}`, padding: 18, background: C.white }}>
