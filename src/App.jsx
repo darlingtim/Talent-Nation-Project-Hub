@@ -167,7 +167,7 @@ function Avatar({ name, size = 40, hue = C.ink, photo }) {
     <div
       style={{
         width: size, height: size, borderRadius: "50%", color: C.white,
-        background: photo ? `url(${photo}) center/cover` : hue,
+        background: photo ? `url(${photo}) center 20%/cover` : hue,
         display: "flex", alignItems: "center", justifyContent: "center",
         fontWeight: 700, fontSize: size * 0.36, flexShrink: 0,
       }}
@@ -1170,18 +1170,18 @@ function AnchorsPage({ go, openAnchor }) {
         </div>
       </div>
       <div style={{ maxWidth: 1000, margin: "0 auto", padding: "56px 24px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, marginBottom: 64, alignItems: "start" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 28, marginBottom: 64, alignItems: "flex-start" }}>
           {ANCHORS.map((a, i) => {
             const compact = i >= 2; // the first two are the large cards; any others are smaller
             return (
-              <div key={a.id} style={{ border: `1px solid ${C.line}`, borderRadius: compact ? 14 : 18, padding: compact ? 16 : 24, textAlign: "center" }}>
+              <div key={a.id} style={{ border: `1px solid ${C.line}`, borderRadius: compact ? 14 : 20, padding: compact ? 20 : 36, textAlign: "center", width: compact ? 300 : 420, maxWidth: "100%", boxSizing: "border-box" }}>
                 <div style={{ margin: compact ? "0 auto 10px" : "0 auto 16px", display: "flex", justifyContent: "center" }}>
-                  <Avatar name={a.name} size={compact ? 52 : 72} hue={a.tag === "Founder" ? C.gold : C.teal} photo={isPhotoUrl(a.photo) ? a.photo : undefined} />
+                  <Avatar name={a.name} size={compact ? 84 : 132} hue={a.tag === "Founder" ? C.gold : C.teal} photo={isPhotoUrl(a.photo) ? a.photo : undefined} />
                 </div>
                 <Badge tone={a.tag === "Founder" ? "gold" : "teal"} style={{ marginBottom: compact ? 6 : 10 }}>{a.tag}</Badge>
-                <p className="tn-display" style={{ fontWeight: 700, fontSize: compact ? 15 : 17, margin: "0 0 2px" }}>{a.name}</p>
+                <p className="tn-display" style={{ fontWeight: 700, fontSize: compact ? 16 : 20, margin: "0 0 2px" }}>{a.name}</p>
                 <p className="tn-body" style={{ fontSize: compact ? 12 : 12.5, color: C.slateLight, margin: compact ? "0 0 8px" : "0 0 14px" }}>{a.role}</p>
-                <p className="tn-body" style={{ fontSize: compact ? 12 : 13, color: C.slate, lineHeight: 1.55, margin: compact ? "0 0 12px" : "0 0 18px" }}>{a.shortBio}</p>
+                <p className="tn-body" style={{ fontSize: compact ? 12.5 : 14, color: C.slate, lineHeight: 1.6, margin: compact ? "0 0 12px" : "0 0 18px" }}>{a.shortBio}</p>
                 <GhostButton small onClick={() => openAnchor(a.id)}>Read more</GhostButton>
               </div>
             );
@@ -1207,7 +1207,7 @@ function AnchorDetailPage({ anchor, go }) {
     <div style={{ maxWidth: 800, margin: "0 auto", padding: "40px 24px 96px" }}>
       <GhostButton small onClick={() => go("anchors")} style={{ marginBottom: 24 }}><ArrowLeft size={14} /> All anchors</GhostButton>
       <div style={{ display: "flex", gap: 20, alignItems: "center", marginBottom: 32 }}>
-        <Avatar name={anchor.name} size={80} hue={anchor.tag === "Founder" ? C.gold : C.teal} photo={isPhotoUrl(anchor.photo) ? anchor.photo : undefined} />
+        <Avatar name={anchor.name} size={120} hue={anchor.tag === "Founder" ? C.gold : C.teal} photo={isPhotoUrl(anchor.photo) ? anchor.photo : undefined} />
         <div>
           <Badge tone={anchor.tag === "Founder" ? "gold" : "teal"} style={{ marginBottom: 8 }}>{anchor.tag}</Badge>
           <h1 className="tn-display" style={{ fontSize: 26, fontWeight: 700, margin: "0 0 4px" }}>{anchor.name}</h1>
