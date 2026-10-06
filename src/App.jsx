@@ -126,7 +126,7 @@ const ANCHORS = [
     id: "daniel-okafor", name: "Daniel Okafor", role: "Co-Founder & Head of Campuses",
     tag: "Co-Founder",
     photo: "DO",
-    shortBio: "Opened and now oversees Talent Nation's Eight campuses, from curriculum delivery to campus-lead hiring.",
+    shortBio: "Opened and now oversees Talent Nation's five campuses, from curriculum delivery to campus-lead hiring.",
     background: "Previously ran regional operations for an education nonprofit across three states. Studied Education Policy.",
     expertise: ["Operations", "Campus growth", "Curriculum design"],
     contribution: "Built the campus-lead training program and the standards that keep quality consistent as Talent Nation expands.",
@@ -547,7 +547,7 @@ function HomePage({ go, openProject, liked, bookmarked, onLike, onBookmark, rece
       </div>
 
       <div style={{ maxWidth: 1180, margin: "0 auto", padding: "80px 24px 0" }}>
-        <SectionHeading eyebrow="Where fellows learn" title="Our campuses" sub="Eight campuses, each with its own strengths and specialties." />
+        <SectionHeading eyebrow="Where fellows learn" title="Our campuses" sub="Five campuses, each with its own strengths and specialties." />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 16 }}>
           {CAMPUSES.map((c) => (
             <div key={c.id} onClick={() => go("campus", c.id)} style={{ cursor: "pointer", borderRadius: 14, border: `1px solid ${C.line}`, padding: 18, background: C.white }}>
@@ -1309,6 +1309,8 @@ function AuthPage({ mode, go }) {
   const [fullName, setFullName] = useState("");
   const [discordName, setDiscordName] = useState("");
   const [memberType, setMemberType] = useState("fellow");
+  const [requestedCampus, setRequestedCampus] = useState("");
+  const [headNote, setHeadNote] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -1322,10 +1324,20 @@ function AuthPage({ mode, go }) {
     setLoading(true);
 
     if (mode === "signup") {
+      if (memberType === "head" && !requestedCampus) {
+        setLoading(false);
+        setError("Please choose the campus you want to lead.");
+        return;
+      }
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { full_name: fullName, discord_username: discordName.trim(), member_type: memberType } },
+        options: { data: {
+          full_name: fullName,
+          discord_username: discordName.trim(),
+          member_type: memberType,
+          ...(memberType === "head" ? { requested_campus: requestedCampus, head_note: headNote.trim() } : {}),
+        } },
       });
       setLoading(false);
       if (error) {
@@ -1353,22 +1365,22 @@ function AuthPage({ mode, go }) {
   return (
     <div style={{ maxWidth: 420, margin: "0 auto", padding: "80px 24px 96px" }}>
       <h1 className="tn-display" style={{ fontSize: 26, fontWeight: 700, textAlign: "center", margin: "0 0 8px" }}>
-        {mode === "login" ? "Log in to your account" : memberType === "mentor" ? "Create your mentor account" : "Create your fellow account"}
+        {mode === "login" ? "Log in to your account" : memberType === "mentor" ? "Create your mentor account" : memberType === "head" ? "Create your Head of Campus account" : "Create your fellow account"}
       </h1>
       <p className="tn-body" style={{ fontSize: 13.5, color: C.slateLight, textAlign: "center", margin: "0 0 32px" }}>
         {mode === "login" ? "Welcome back." : "Join the Talent Nation Project Hub."}
       </p>
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {mode === "signup" && (
-          <div style={{ display: "flex", gap: 10 }}>
-            {[["fellow", "I'm a Fellow"], ["mentor", "I'm a Mentor"]].map(([val, label]) => (
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {[["fellow", "I'm a Fellow"], ["mentor", "I'm a Mentor"], ["head", "I'm a Head of Campus"]].map(([val, label]) => (
               <button
                 key={val}
                 type="button"
                 onClick={() => setMemberType(val)}
                 className="tn-body"
                 style={{
-                  flex: 1, padding: "12px 14px", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer",
+                  flex: "1 1 120px", padding: "12px 10px", borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: "pointer",
                   border: `1.5px solid ${memberType === val ? C.teal : C.line}`,
                   background: memberType === val ? C.tealPale : C.white,
                   color: memberType === val ? C.tealDeep : C.slate,
@@ -1398,6 +1410,31 @@ function AuthPage({ mode, go }) {
             className="tn-body"
             style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${C.line}`, fontSize: 14 }}
           />
+        )}
+        {mode === "signup" && memberType === "head" && (
+          <>
+            <select
+              value={requestedCampus}
+              onChange={(e) => setRequestedCampus(e.target.value)}
+              required
+              className="tn-body"
+              style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${C.line}`, fontSize: 14, background: C.white, color: requestedCampus ? C.ink : C.slateLight }}
+            >
+              <option value="">Which campus will you lead?</option>
+              {CAMPUSES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <textarea
+              value={headNote}
+              onChange={(e) => setHeadNote(e.target.value)}
+              placeholder="Tell us briefly about yourself and why you should lead this campus"
+              rows={3}
+              className="tn-body"
+              style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${C.line}`, fontSize: 14, resize: "vertical", fontFamily: "inherit" }}
+            />
+            <p className="tn-body" style={{ fontSize: 12.5, color: C.slateLight, margin: 0 }}>
+              Head of Campus accounts are reviewed. You can log in right away, and you'll become Head once the Talent Nation team approves your request.
+            </p>
+          </>
         )}
         <input
           value={email}
@@ -1440,7 +1477,7 @@ function AuthPage({ mode, go }) {
 
 /* -------------------------------- fellow dashboard ------------------------------- */
 
-function FellowDashboard({ go, openProject, onEdit, onProjectDeleted, session, profile, isMentor }) {
+function FellowDashboard({ go, openProject, onEdit, onProjectDeleted, session, profile, isMentor, headRequest, isOwner, pendingHeadCount }) {
   const [myProjects, setMyProjects] = useState([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
@@ -1498,11 +1535,27 @@ function FellowDashboard({ go, openProject, onEdit, onProjectDeleted, session, p
           </div>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
+          {isOwner && (
+            <GhostButton onClick={() => go("headRequests")}>
+              <Users size={14} /> Head requests{pendingHeadCount > 0 ? ` (${pendingHeadCount})` : ""}
+            </GhostButton>
+          )}
           {isMentor && <GhostButton onClick={() => go("review")}><Sparkles size={14} /> Review submissions</GhostButton>}
           <GhostButton onClick={() => go("editProfile")}><Pencil size={14} /> Edit profile</GhostButton>
           <PrimaryButton onClick={() => { onEdit?.(null); go("submit"); }}><Plus size={15} /> Submit a project</PrimaryButton>
         </div>
       </div>
+
+      {headRequest?.status === "pending" && (
+        <div className="tn-body" style={{ background: C.goldPale, border: `1px solid ${C.gold}`, borderRadius: 12, padding: "14px 18px", fontSize: 13.5, marginBottom: 24 }}>
+          <b>Head of Campus request pending.</b> Your request to lead {CAMPUSES.find((c) => c.dbId === headRequest.campus_id)?.name || "your campus"} is waiting for approval from the Talent Nation team. Until then you have a regular account.
+        </div>
+      )}
+      {headRequest?.status === "rejected" && (
+        <div className="tn-body" style={{ background: C.dangerPale, border: `1px solid ${C.danger}`, borderRadius: 12, padding: "14px 18px", fontSize: 13.5, marginBottom: 24 }}>
+          Your Head of Campus request wasn't approved. You still have a full account and can take part as a fellow.
+        </div>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 40 }}>
         {stats.map(([label, val, Icon]) => (
@@ -1982,6 +2035,103 @@ function ReviewPage({ go, openProject, myMentorships, onChanged }) {
   );
 }
 
+/* ---------------------------------- head requests ---------------------------------- */
+
+function HeadRequestsPage({ go, openFellow, onChanged }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState(null);
+  const [error, setError] = useState("");
+
+  const load = () => {
+    setLoading(true);
+    supabase.rpc("list_head_requests").then(({ data, error: rpcError }) => {
+      setLoading(false);
+      if (rpcError) {
+        setError(rpcError.message);
+        return;
+      }
+      setRows(data || []);
+    });
+  };
+  useEffect(load, []);
+
+  const decide = async (r, approve) => {
+    if (approve && r.current_head) {
+      const ok = window.confirm(`${r.current_head} is the current Head of this campus. Approving will move them to Coding Mentor. Continue?`);
+      if (!ok) return;
+    }
+    setError("");
+    setBusyId(r.id);
+    const { error: rpcError } = await supabase.rpc(approve ? "approve_head_request" : "reject_head_request", { p_request: r.id });
+    setBusyId(null);
+    if (rpcError) {
+      setError(rpcError.message);
+      return;
+    }
+    load();
+    onChanged?.();
+  };
+
+  const pending = rows.filter((r) => r.status === "pending");
+  const decided = rows.filter((r) => r.status !== "pending");
+
+  const renderRow = (r) => {
+    const campus = CAMPUSES.find((c) => c.dbId === r.campus_id);
+    return (
+      <div key={r.id} style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+          <div style={{ flex: "1 1 300px" }}>
+            <p className="tn-display" style={{ fontWeight: 700, fontSize: 15, margin: "0 0 3px" }}>{r.full_name || "New member"}</p>
+            <p className="tn-body" style={{ fontSize: 12.5, color: C.slateLight, margin: "0 0 8px" }}>
+              {r.email} · wants to lead <b>{campus?.name || "a campus"}</b> · {new Date(r.created_at).toLocaleDateString()}
+            </p>
+            {r.note && <p className="tn-body" style={{ fontSize: 13.5, color: C.slate, lineHeight: 1.6, margin: "0 0 8px" }}>"{r.note}"</p>}
+            {r.current_head && r.status === "pending" && (
+              <p className="tn-body" style={{ fontSize: 12.5, color: C.goldDeep, margin: 0 }}>This campus already has a Head: {r.current_head}.</p>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <GhostButton small onClick={() => openFellow(r.user_id)}>View profile</GhostButton>
+            {r.status === "pending" ? (
+              <>
+                <GhostButton small disabled={busyId === r.id} onClick={() => decide(r, false)}>Reject</GhostButton>
+                <PrimaryButton small disabled={busyId === r.id} onClick={() => decide(r, true)}>{busyId === r.id ? "Working…" : "Approve"}</PrimaryButton>
+              </>
+            ) : (
+              <Badge tone={r.status === "approved" ? "teal" : "gold"}>{r.status}</Badge>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ maxWidth: 900, margin: "0 auto", padding: "40px 24px 96px" }}>
+      <GhostButton small onClick={() => go("dashboard")} style={{ marginBottom: 24 }}><ArrowLeft size={14} /> Back to dashboard</GhostButton>
+      <SectionHeading eyebrow="Owner tools" title="Head of Campus requests" sub="People who signed up as a Head of Campus. Approve the ones who are qualified." />
+      {error && <p className="tn-body" style={{ fontSize: 13, color: C.danger }}>{error}</p>}
+      {loading ? (
+        <p className="tn-body" style={{ fontSize: 13.5, color: C.slateLight }}>Loading…</p>
+      ) : (
+        <>
+          <p className="tn-display" style={{ fontSize: 15, fontWeight: 700, margin: "0 0 12px" }}>Waiting for your decision ({pending.length})</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 40 }}>
+            {pending.length === 0 ? <p className="tn-body" style={{ fontSize: 13.5, color: C.slateLight }}>No pending requests.</p> : pending.map(renderRow)}
+          </div>
+          {decided.length > 0 && (
+            <>
+              <p className="tn-display" style={{ fontSize: 15, fontWeight: 700, margin: "0 0 12px" }}>Decided</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>{decided.map(renderRow)}</div>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 /* ------------------------------------- edit profile -------------------------------------- */
 
 function EditProfilePage({ go, session, profile, onSaved, isMentor }) {
@@ -2299,6 +2449,68 @@ export default function App() {
   };
   useEffect(fetchMyMentorships, [session]);
 
+  // Head-of-Campus signup requests: the person's own request, and (for the
+  // site owner only) how many are waiting for a decision.
+  const [headRequest, setHeadRequest] = useState(null);
+  const [isOwner, setIsOwner] = useState(false);
+  const [pendingHeadCount, setPendingHeadCount] = useState(0);
+
+  const fetchHeadRequest = () => {
+    if (!session) { setHeadRequest(null); return; }
+    supabase
+      .from("head_requests")
+      .select("*")
+      .eq("user_id", session.user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .then(({ data }) => setHeadRequest((data && data[0]) || null));
+  };
+  useEffect(fetchHeadRequest, [session]);
+
+  const fetchOwnerInfo = () => {
+    if (!session) { setIsOwner(false); setPendingHeadCount(0); return; }
+    supabase
+      .from("site_owners")
+      .select("user_id")
+      .eq("user_id", session.user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        const owner = !!data;
+        setIsOwner(owner);
+        if (!owner) { setPendingHeadCount(0); return; }
+        supabase
+          .from("head_requests")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "pending")
+          .then(({ count }) => setPendingHeadCount(count || 0));
+      });
+  };
+  useEffect(fetchOwnerInfo, [session]);
+
+  // Signing up as a Head of Campus files a request (once) the first time the
+  // person is logged in.
+  useEffect(() => {
+    const meta = session?.user?.user_metadata;
+    if (!session || !profile || meta?.member_type !== "head") return;
+    supabase
+      .from("head_requests")
+      .select("id")
+      .eq("user_id", session.user.id)
+      .limit(1)
+      .then(({ data }) => {
+        if (data && data.length > 0) return;
+        const campus = CAMPUSES.find((c) => c.id === meta.requested_campus);
+        if (!campus) return;
+        supabase
+          .from("head_requests")
+          .insert({ user_id: session.user.id, campus_id: campus.dbId, note: meta.head_note || null })
+          .then(({ error }) => {
+            if (error) { console.error("Failed to file Head request:", error); return; }
+            fetchHeadRequest();
+          });
+      });
+  }, [session, profile?.id, CAMPUSES.length]);
+
   // A "mentor" is anyone who signed up as one, or who a Head added to a campus.
   const isMentorUser = profile?.member_type === "mentor" || myMentorships.length > 0;
 
@@ -2324,7 +2536,7 @@ export default function App() {
 
   // If someone logs out while on a fellow/admin-only page, send them home.
   useEffect(() => {
-    if (role === "visitor" && ["dashboard", "admin", "submit", "editProfile", "review"].includes(view)) {
+    if (role === "visitor" && ["dashboard", "admin", "submit", "editProfile", "review", "headRequests"].includes(view)) {
       setView("home");
     }
   }, [role, view]);
@@ -2602,7 +2814,14 @@ export default function App() {
       {view === "about" && <AboutPage go={go} />}
       {view === "login" && <AuthPage mode="login" go={go} />}
       {view === "signup" && <AuthPage mode="signup" go={go} />}
-      {view === "dashboard" && <FellowDashboard go={go} openProject={openProject} onEdit={setEditingProjectId} onProjectDeleted={fetchRecentProjects} session={session} profile={profile} isMentor={isMentorUser} />}
+      {view === "dashboard" && <FellowDashboard go={go} openProject={openProject} onEdit={setEditingProjectId} onProjectDeleted={fetchRecentProjects} session={session} profile={profile} isMentor={isMentorUser} headRequest={headRequest} isOwner={isOwner} pendingHeadCount={pendingHeadCount} />}
+      {view === "headRequests" && isOwner && (
+        <HeadRequestsPage
+          go={go}
+          openFellow={openFellow}
+          onChanged={() => { fetchOwnerInfo(); fetchMyMentorships(); fetchProfile(); fetchFellows(); }}
+        />
+      )}
       {view === "review" && (
         <ReviewPage
           go={go}
