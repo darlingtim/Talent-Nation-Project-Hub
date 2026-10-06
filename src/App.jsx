@@ -342,9 +342,7 @@ function NavBar({ view, go, role, displayName, avatarUrl, onLogout, mobileOpen, 
     <div style={{ position: "sticky", top: 0, zIndex: 50, background: C.white, borderBottom: `1px solid ${C.line}` }}>
       <div style={{ maxWidth: 1180, margin: "0 auto", padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 68 }}>
         <div onClick={() => go("home")} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
-          <div style={{ width: 34, height: 34, borderRadius: 9, background: C.ink, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Sparkles size={17} color={C.gold} />
-          </div>
+          <img src="/logo.png" alt="Talent Nation" style={{ height: 36, width: "auto", display: "block" }} />
           <div>
             <p className="tn-display" style={{ margin: 0, fontSize: 15.5, fontWeight: 700, color: C.ink, lineHeight: 1.1 }}>Talent Nation</p>
             <p className="tn-body" style={{ margin: 0, fontSize: 10.5, fontWeight: 600, color: C.slateLight, letterSpacing: 0.3 }}>Project Hub</p>
