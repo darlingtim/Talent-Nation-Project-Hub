@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { supabase } from "./supabaseClient";
 import {
   Search, Menu, X, ChevronRight, ChevronDown, Heart, Bookmark, Share2, Code2,
-  Link2, Globe, Users, FolderKanban, Building2, Sparkles, Eye, EyeOff,
+  Link2, Globe, Users, FolderKanban, Building2, Sparkles, Eye, EyeOff, ExternalLink,
   LayoutDashboard, ShieldCheck, TrendingUp, CheckCircle2, XCircle, MapPin,
   Calendar, Quote, Mail, PlayCircle, FileText, ArrowLeft, Plus, Trash2, Pencil,
 } from "lucide-react";
@@ -145,6 +145,7 @@ function Badge({ children, tone = "neutral", style }) {
     neutral: { background: C.paperDeep, color: C.slate },
     gold: { background: C.goldPale, color: C.goldDeep },
     teal: { background: C.tealPale, color: C.tealDeep },
+    danger: { background: C.dangerPale, color: C.danger },
     ink: { background: C.ink, color: C.white },
   };
   return (
@@ -329,7 +330,7 @@ function ProjectCard({ project, onOpen, liked, bookmarked, onLike, onBookmark, b
 
 /* ---------------------------------- navbar ---------------------------------- */
 
-function NavBar({ view, go, role, displayName, avatarUrl, onLogout, mobileOpen, setMobileOpen }) {
+function NavBar({ view, go, role, displayName, avatarUrl, onLogout, mobileOpen, setMobileOpen, isMentor }) {
   const links = [
     ["home", "Home"],
     ["explore", "Explore projects"],
@@ -375,7 +376,7 @@ function NavBar({ view, go, role, displayName, avatarUrl, onLogout, mobileOpen, 
             </>
           ) : (
             <>
-              <PrimaryButton small onClick={() => go("submit")}>Submit a project</PrimaryButton>
+              <PrimaryButton small onClick={() => go("submit")}>{isMentor ? "Upload portfolio" : "Submit a project"}</PrimaryButton>
               <button
                 onClick={() => go(role === "admin" ? "admin" : "dashboard")}
                 style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center" }}
@@ -416,7 +417,7 @@ function NavBar({ view, go, role, displayName, avatarUrl, onLogout, mobileOpen, 
               </>
             ) : (
               <>
-                <PrimaryButton small onClick={() => { go("submit"); setMobileOpen(false); }}>Submit a project</PrimaryButton>
+                <PrimaryButton small onClick={() => { go("submit"); setMobileOpen(false); }}>{isMentor ? "Upload portfolio" : "Submit a project"}</PrimaryButton>
                 <GhostButton small onClick={() => { onLogout(); setMobileOpen(false); }}>Log out</GhostButton>
               </>
             )}
@@ -555,9 +556,9 @@ function HomePage({ go, openProject, liked, bookmarked, onLike, onBookmark, rece
       <div style={{ maxWidth: 1180, margin: "0 auto", padding: "80px 24px 96px" }}>
         <div style={{ background: C.teal, borderRadius: 24, padding: "56px 48px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 24 }}>
           <div style={{ maxWidth: 460 }}>
-            <h3 className="tn-display" style={{ color: C.white, fontSize: 26, fontWeight: 700, margin: "0 0 10px" }}>Behind Talent Nation is a small team with a clear vision.</h3>
+            <h3 className="tn-display" style={{ color: C.white, fontSize: 26, fontWeight: 700, margin: "0 0 10px" }}>Meet the visionaries building the future of tech talent.</h3>
             <p className="tn-body" style={{ color: "rgba(255,255,255,0.8)", fontSize: 14.5, lineHeight: 1.6, margin: 0 }}>
-              Meet the founder and co-founders shaping the fellowship and the community around it.
+              Get to know the leaders who inspire, guide and open doors for every Talent Nation fellow.
             </p>
           </div>
           <PrimaryButton onClick={() => go("anchors")}>Meet the anchors <ChevronRight size={16} /></PrimaryButton>
@@ -1460,7 +1461,7 @@ function AuthPage({ mode, go }) {
         />
         {mode === "signup" && (
           <p className="tn-body" style={{ fontSize: 12.5, color: C.slateLight, margin: 0, lineHeight: 1.5 }}>
-            Choose a strong password: at least 8 characters, mixing upper and lower case letters, numbers and a symbol. Don't reuse a password from another site.
+            Use a strong password: 8+ characters with letters, numbers and a symbol.
           </p>
         )}
         <div style={{ position: "relative" }}>
@@ -1586,7 +1587,7 @@ function FellowDashboard({ go, openProject, onEdit, onProjectDeleted, session, p
           )}
           {isMentor && <GhostButton onClick={() => go("review")}><Sparkles size={14} /> Review submissions</GhostButton>}
           <GhostButton onClick={() => go("editProfile")}><Pencil size={14} /> Edit profile</GhostButton>
-          <PrimaryButton onClick={() => { onEdit?.(null); go("submit"); }}><Plus size={15} /> Submit a project</PrimaryButton>
+          <PrimaryButton onClick={() => { onEdit?.(null); go("submit"); }}><Plus size={15} /> {isMentor ? "Upload portfolio" : "Submit a project"}</PrimaryButton>
         </div>
       </div>
 
@@ -1612,28 +1613,58 @@ function FellowDashboard({ go, openProject, onEdit, onProjectDeleted, session, p
       </div>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-        <p className="tn-display" style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>Your projects</p>
+        <p className="tn-display" style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>{isMentor ? "Your portfolio" : "Your projects"}</p>
       </div>
       {loadingProjects ? (
         <p className="tn-body" style={{ fontSize: 13.5, color: C.slateLight }}>Loading…</p>
       ) : myProjects.length === 0 ? (
         <div style={{ border: `1px dashed ${C.line}`, borderRadius: 14, padding: 32, textAlign: "center" }}>
           <p className="tn-body" style={{ fontSize: 13.5, color: C.slateLight, margin: "0 0 14px" }}>
-            You haven't submitted a project yet.
+            {isMentor ? "You haven't uploaded any portfolio work yet." : "You haven't submitted a project yet."}
           </p>
-          <GhostButton small onClick={() => { onEdit?.(null); go("submit"); }}><Plus size={13} /> Submit your first project</GhostButton>
+          <GhostButton small onClick={() => { onEdit?.(null); go("submit"); }}><Plus size={13} /> {isMentor ? "Upload your first portfolio item" : "Submit your first project"}</GhostButton>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {myProjects.map((p) => (
             <div key={p.id} style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 16, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-              <div style={{ cursor: "pointer" }} onClick={() => openProject(p.id)}>
+              {isMentor && (
+                <div
+                  onClick={() => openProject(p.id)}
+                  style={{ cursor: "pointer", width: 200, aspectRatio: "16 / 9", borderRadius: 10, overflow: "hidden", background: C.paperDeep, border: `1px solid ${C.line}`, flexShrink: 0 }}
+                >
+                  {p.cover_image_url && <img src={p.cover_image_url} alt={p.title} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
+                </div>
+              )}
+              <div style={{ cursor: "pointer", flex: isMentor ? "1 1 220px" : undefined }} onClick={() => openProject(p.id)}>
                 <p className="tn-display" style={{ fontWeight: 700, fontSize: 14.5, margin: "0 0 3px" }}>{p.title}</p>
                 <p className="tn-body" style={{ fontSize: 12.5, color: C.slateLight, margin: 0, display: "flex", alignItems: "center", gap: 6 }}>
                   <StatusDot status={p.status} /> {p.status} · {(p.views || 0).toLocaleString()} views
                 </p>
+                <div style={{ marginTop: 8 }}>
+                  {p.approved ? (
+                    <Badge tone="teal">Approved · live on Explore</Badge>
+                  ) : p.rejected ? (
+                    <Badge tone="danger">Declined</Badge>
+                  ) : (
+                    <Badge tone="gold">Waiting for review</Badge>
+                  )}
+                </div>
+                {p.rejected && !p.approved && (
+                  <p className="tn-body" style={{ fontSize: 12.5, color: C.slate, margin: "8px 0 0", maxWidth: 480, lineHeight: 1.5 }}>
+                    {p.rejection_reason ? `Mentor's note: ${p.rejection_reason}. ` : ""}Edit it and save to send it back for review.
+                  </p>
+                )}
               </div>
               <div style={{ display: "flex", gap: 8 }}>
+                {isMentor && (
+                  <PrimaryButton
+                    small
+                    onClick={() => (p.demo_url ? window.open(p.demo_url, "_blank", "noopener,noreferrer") : openProject(p.id))}
+                  >
+                    <ExternalLink size={13} /> View
+                  </PrimaryButton>
+                )}
                 <GhostButton small onClick={() => { onEdit?.(p.id); go("submit"); }}><Pencil size={13} /> Edit</GhostButton>
                 <GhostButton
                   small
@@ -1756,7 +1787,7 @@ function Field({ label, children }) {
   );
 }
 
-function SubmitProjectPage({ go, session, onSubmitted, editId }) {
+function SubmitProjectPage({ go, session, onSubmitted, editId, isMentor }) {
   const [title, setTitle] = useState("");
   const [shortDesc, setShortDesc] = useState("");
   const [fullDesc, setFullDesc] = useState("");
@@ -1828,6 +1859,10 @@ function SubmitProjectPage({ go, session, onSubmitted, editId }) {
       setError("Please fill in the project title, short description, category, and campus.");
       return;
     }
+    if (isMentor && !demoUrl.trim()) {
+      setError("Please add the link to your live portfolio so people can view it.");
+      return;
+    }
     const campus = CAMPUSES.find((c) => c.id === campusSlug);
     if (!campus?.dbId) {
       setError("That campus isn't available right now — try refreshing the page.");
@@ -1866,8 +1901,10 @@ function SubmitProjectPage({ go, session, onSubmitted, editId }) {
       year: Number(year),
       technologies: techText.split(",").map((t) => t.trim()).filter(Boolean),
       github_url: githubUrl || null,
-      demo_url: demoUrl || null,
+      demo_url: demoUrl.trim() ? (/^https?:\/\//i.test(demoUrl.trim()) ? demoUrl.trim() : `https://${demoUrl.trim()}`) : null,
       cover_image_url: coverImageUrl,
+      // Editing a declined project sends it back to the mentors for review.
+      ...(editId ? { rejected: false, rejection_reason: null } : {}),
     };
 
     const { error: saveError } = editId
@@ -1894,9 +1931,9 @@ function SubmitProjectPage({ go, session, onSubmitted, editId }) {
   return (
     <div style={{ maxWidth: 700, margin: "0 auto", padding: "40px 24px 96px" }}>
       <SectionHeading
-        eyebrow={editId ? "Edit submission" : "New submission"}
-        title={editId ? "Edit project" : "Submit a project"}
-        sub={editId ? "Update your project's details below." : "Add your project to the Project Hub. An admin will review it before it's featured publicly."}
+        eyebrow={editId ? "Edit submission" : isMentor ? "New portfolio" : "New submission"}
+        title={editId ? (isMentor ? "Edit portfolio" : "Edit project") : isMentor ? "Upload portfolio" : "Submit a project"}
+        sub={editId ? (isMentor ? "Update your portfolio details below." : "Update your project's details below.") : isMentor ? "Share your own work as a mentor. It's reviewed before it appears publicly." : "Add your project to the Project Hub. An admin will review it before it's featured publicly."}
       />
       <form onSubmit={handleSubmit} style={{ border: `1px solid ${C.line}`, borderRadius: 16, padding: 28, display: "flex", flexDirection: "column", gap: 18 }}>
         <Field label="Project title *">
@@ -1938,12 +1975,40 @@ function SubmitProjectPage({ go, session, onSubmitted, editId }) {
           </Field>
         </div>
 
-        <Field label="Project picture">
-          <input type="file" accept="image/*" onChange={handleCoverChange} className="tn-body" style={{ fontSize: 13.5 }} />
-          {(coverPreview || existingCoverUrl) && (
-            <img src={coverPreview || existingCoverUrl} alt="Preview" style={{ marginTop: 10, width: "100%", maxHeight: 180, objectFit: "cover", borderRadius: 10, border: `1px solid ${C.line}` }} />
-          )}
-        </Field>
+        {isMentor ? (
+          <Field label="Portfolio picture">
+            <label
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8,
+                width: "100%", aspectRatio: "16 / 9", borderRadius: 14, overflow: "hidden", cursor: "pointer",
+                border: `2px dashed ${C.line}`, background: C.paperDeep, position: "relative", boxSizing: "border-box",
+              }}
+            >
+              {(coverPreview || existingCoverUrl) ? (
+                <>
+                  <img src={coverPreview || existingCoverUrl} alt="Portfolio preview" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                  <span className="tn-body" style={{ position: "absolute", right: 12, bottom: 12, background: "rgba(27,16,146,0.85)", color: C.white, fontSize: 12.5, fontWeight: 600, padding: "6px 12px", borderRadius: 999 }}>
+                    Change picture
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Plus size={28} color={C.slateLight} />
+                  <span className="tn-body" style={{ fontSize: 14, fontWeight: 600, color: C.slate }}>Click to add a wide picture of your portfolio</span>
+                  <span className="tn-body" style={{ fontSize: 12.5, color: C.slateLight }}>Landscape works best, for example 1600 × 900</span>
+                </>
+              )}
+              <input type="file" accept="image/*" onChange={handleCoverChange} style={{ display: "none" }} />
+            </label>
+          </Field>
+        ) : (
+          <Field label="Project picture">
+            <input type="file" accept="image/*" onChange={handleCoverChange} className="tn-body" style={{ fontSize: 13.5 }} />
+            {(coverPreview || existingCoverUrl) && (
+              <img src={coverPreview || existingCoverUrl} alt="Preview" style={{ marginTop: 10, width: "100%", maxHeight: 180, objectFit: "cover", borderRadius: 10, border: `1px solid ${C.line}` }} />
+            )}
+          </Field>
+        )}
 
         <Field label="Technologies (comma-separated)">
           <input value={techText} onChange={(e) => setTechText(e.target.value)} placeholder="React, Node.js, PostgreSQL" className="tn-body" style={inputStyle} />
@@ -1953,8 +2018,8 @@ function SubmitProjectPage({ go, session, onSubmitted, editId }) {
           <Field label="GitHub link">
             <input value={githubUrl} onChange={(e) => setGithubUrl(e.target.value)} placeholder="https://github.com/…" className="tn-body" style={inputStyle} />
           </Field>
-          <Field label="Live demo link">
-            <input value={demoUrl} onChange={(e) => setDemoUrl(e.target.value)} placeholder="https://…" className="tn-body" style={inputStyle} />
+          <Field label={isMentor ? "Live portfolio link *" : "Live demo link"}>
+            <input value={demoUrl} onChange={(e) => setDemoUrl(e.target.value)} placeholder={isMentor ? "https://yourportfolio.com" : "https://…"} className="tn-body" style={inputStyle} />
           </Field>
         </div>
 
@@ -1962,7 +2027,7 @@ function SubmitProjectPage({ go, session, onSubmitted, editId }) {
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
           <GhostButton small onClick={() => go("dashboard")}>Cancel</GhostButton>
-          <PrimaryButton small disabled={submitting}>{submitting ? "Saving…" : editId ? "Save changes" : "Submit project"}</PrimaryButton>
+          <PrimaryButton small disabled={submitting}>{submitting ? "Saving…" : editId ? "Save changes" : isMentor ? "Upload portfolio" : "Submit project"}</PrimaryButton>
         </div>
       </form>
     </div>
@@ -2011,23 +2076,39 @@ function ReviewPage({ go, openProject, myMentorships, onChanged }) {
   };
   useEffect(load, [campusIds.join(",")]);
 
-  const setApproved = async (p, value) => {
+  // action: "approve" | "reject" | "hide". Fellows are emailed about
+  // approvals and declines by the database + Edge Function, not from here.
+  const review = async (p, action) => {
+    let patch;
+    if (action === "approve") {
+      patch = { approved: true, rejected: false, rejection_reason: null };
+    } else if (action === "reject") {
+      const reason = window.prompt(
+        `Decline "${p.title}"?\n\nOptional: tell the fellow why (they will see this in their email). Leave it blank to skip, or press Cancel to go back.`,
+        "",
+      );
+      if (reason === null) return;
+      patch = { approved: false, rejected: true, rejection_reason: reason.trim() || null };
+    } else {
+      patch = { approved: false };
+    }
     setError("");
     setBusyId(p.id);
-    const { error: updateError } = await supabase.from("projects").update({ approved: value }).eq("id", p.id);
+    const { error: updateError } = await supabase.from("projects").update(patch).eq("id", p.id);
     setBusyId(null);
     if (updateError) {
       setError(updateError.message);
       return;
     }
-    setRows((cur) => cur.map((r) => (r.id === p.id ? { ...r, approved: value } : r)));
+    setRows((cur) => cur.map((r) => (r.id === p.id ? { ...r, ...patch } : r)));
     onChanged?.();
   };
 
-  const pending = rows.filter((r) => !r.approved);
+  const pending = rows.filter((r) => !r.approved && !r.rejected);
   const approved = rows.filter((r) => r.approved);
+  const declined = rows.filter((r) => !r.approved && r.rejected);
 
-  const renderRow = (p, isPending) => {
+  const renderRow = (p, kind) => {
     const campus = CAMPUSES.find((c) => c.dbId === p.campus_id);
     return (
       <div key={p.id} style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 16, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
@@ -2040,12 +2121,19 @@ function ReviewPage({ go, openProject, myMentorships, onChanged }) {
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <GhostButton small onClick={() => openProject(p.id)}>View</GhostButton>
-          {isPending ? (
-            <PrimaryButton small disabled={busyId === p.id} onClick={() => setApproved(p, true)}>
-              {busyId === p.id ? "Approving…" : "Approve"}
-            </PrimaryButton>
+          {kind === "pending" ? (
+            <>
+              <GhostButton small disabled={busyId === p.id} style={{ color: C.danger, borderColor: "#F0D3D3" }} onClick={() => review(p, "reject")}>
+                <XCircle size={13} /> Reject
+              </GhostButton>
+              <PrimaryButton small disabled={busyId === p.id} onClick={() => review(p, "approve")}>
+                {busyId === p.id ? "Saving…" : "Approve"}
+              </PrimaryButton>
+            </>
+          ) : kind === "approved" ? (
+            <GhostButton small disabled={busyId === p.id} onClick={() => review(p, "hide")}>Hide from Explore</GhostButton>
           ) : (
-            <GhostButton small disabled={busyId === p.id} onClick={() => setApproved(p, false)}>Hide from Explore</GhostButton>
+            <GhostButton small disabled={busyId === p.id} onClick={() => review(p, "approve")}>Approve instead</GhostButton>
           )}
         </div>
       </div>
@@ -2055,7 +2143,7 @@ function ReviewPage({ go, openProject, myMentorships, onChanged }) {
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: "40px 24px 96px" }}>
       <GhostButton small onClick={() => go("dashboard")} style={{ marginBottom: 24 }}><ArrowLeft size={14} /> Back to dashboard</GhostButton>
-      <SectionHeading eyebrow="Mentor tools" title="Review submissions" sub="Approve projects from your campus. Approved projects appear on Explore projects right away." />
+      <SectionHeading eyebrow="Mentor tools" title="Review submissions" sub="Approve or decline projects from your campus. Fellows get an email either way, and approved projects appear on Explore projects right away." />
       {error && <p className="tn-body" style={{ fontSize: 13, color: C.danger }}>{error}</p>}
       {loading ? (
         <p className="tn-body" style={{ fontSize: 13.5, color: C.slateLight }}>Loading…</p>
@@ -2067,12 +2155,20 @@ function ReviewPage({ go, openProject, myMentorships, onChanged }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 40 }}>
             {pending.length === 0 ? (
               <p className="tn-body" style={{ fontSize: 13.5, color: C.slateLight }}>Nothing waiting. You're all caught up.</p>
-            ) : pending.map((p) => renderRow(p, true))}
+            ) : pending.map((p) => renderRow(p, "pending"))}
           </div>
           <p className="tn-display" style={{ fontSize: 15, fontWeight: 700, margin: "0 0 12px" }}>Approved ({approved.length})</p>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {approved.map((p) => renderRow(p, false))}
+            {approved.map((p) => renderRow(p, "approved"))}
           </div>
+          {declined.length > 0 && (
+            <>
+              <p className="tn-display" style={{ fontSize: 15, fontWeight: 700, margin: "40px 0 12px" }}>Declined ({declined.length})</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {declined.map((p) => renderRow(p, "declined"))}
+              </div>
+            </>
+          )}
         </>
       )}
     </div>
@@ -2850,7 +2946,7 @@ export default function App() {
   return (
     <div className="tn-body" style={{ background: C.paper, minHeight: "100vh" }}>
       <style>{FONTS}</style>
-      <NavBar view={view} go={go} role={role} displayName={displayName} avatarUrl={profile?.avatar_url} onLogout={handleLogout} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
+      <NavBar view={view} go={go} role={role} displayName={displayName} avatarUrl={profile?.avatar_url} onLogout={handleLogout} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} isMentor={isMentorUser} />
 
       {view === "home" && <HomePage go={go} openProject={openProject} liked={liked} bookmarked={bookmarked} onLike={onLike} onBookmark={onBookmark} recentProjects={recentProjects} campusStats={campusStats} />}
       {view === "explore" && <ExplorePage go={go} openProject={openProject} liked={liked} bookmarked={bookmarked} onLike={onLike} onBookmark={onBookmark} projects={exploreProjects} loading={loadingExplore} />}
@@ -2896,6 +2992,7 @@ export default function App() {
           session={session}
           onSubmitted={() => { fetchRecentProjects(); setEditingProjectId(null); }}
           editId={editingProjectId}
+          isMentor={isMentorUser}
         />
       )}
 
