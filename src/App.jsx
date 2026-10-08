@@ -1,8 +1,8 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { supabase } from "./supabaseClient";
 import {
   Search, Menu, X, ChevronRight, ChevronDown, Heart, Bookmark, Share2, Code2,
-  Link2, Globe, Users, FolderKanban, Building2, Sparkles, Eye,
+  Link2, Globe, Users, FolderKanban, Building2, Sparkles, Eye, EyeOff,
   LayoutDashboard, ShieldCheck, TrendingUp, CheckCircle2, XCircle, MapPin,
   Calendar, Quote, Mail, PlayCircle, FileText, ArrowLeft, Plus, Trash2, Pencil,
 } from "lucide-react";
@@ -118,7 +118,7 @@ const ANCHORS = [
     id: "daniel-okafor", name: "Daniel Okafor", role: "Co-Founder & Head of Campuses",
     tag: "Co-Founder",
     photo: "DO",
-    shortBio: "Opened and now oversees Talent Nation's five campuses, from curriculum delivery to campus-lead hiring.",
+    shortBio: "Opened and now oversees Talent Nation's eight campuses, from curriculum delivery to campus-lead hiring.",
     background: "Previously ran regional operations for an education nonprofit across three states. Studied Education Policy.",
     expertise: ["Operations", "Campus growth", "Curriculum design"],
     contribution: "Built the campus-lead training program and the standards that keep quality consistent as Talent Nation expands.",
@@ -537,8 +537,8 @@ function HomePage({ go, openProject, liked, bookmarked, onLike, onBookmark, rece
       </div>
 
       <div style={{ maxWidth: 1180, margin: "0 auto", padding: "80px 24px 0" }}>
-        <SectionHeading eyebrow="Where fellows learn" title="Our campuses" sub="Five campuses, each with its own strengths and specialties." />
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 16 }}>
+        <SectionHeading eyebrow="Where fellows learn" title="Our campuses" sub="Eight campuses, each with its own strengths and specialties." />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
           {CAMPUSES.map((c) => (
             <div key={c.id} onClick={() => go("campus", c.id)} style={{ cursor: "pointer", borderRadius: 14, border: `1px solid ${C.line}`, padding: 18, background: C.white }}>
               <div style={{ width: 38, height: 38, borderRadius: 10, background: c.hue, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
@@ -1295,6 +1295,28 @@ function AboutPage({ go }) {
 
 /* --------------------------------- auth pages ----------------------------------- */
 
+/* password strength: returns 0-4 plus a label and colour */
+function passwordStrength(pw) {
+  if (!pw) return { score: 0, label: "", color: C.line };
+  let score = 0;
+  if (pw.length >= 8) score++;
+  if (pw.length >= 12) score++;
+  if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) score++;
+  if (/\d/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  if (/^(.)\1+$/.test(pw) || /^(123456|password|qwerty|abcdef)\d*$/i.test(pw)) score = Math.min(score, 1);
+  if (pw.length < 8) score = Math.min(score, 1);
+  const level = Math.min(4, score);
+  const map = [
+    { label: "Too weak", color: C.danger },
+    { label: "Weak", color: C.danger },
+    { label: "Fair, add more variety", color: C.gold },
+    { label: "Good", color: C.teal },
+    { label: "Strong", color: "#1E8E5A" },
+  ];
+  return { score: level, ...map[level] };
+}
+
 function AuthPage({ mode, go }) {
   const [fullName, setFullName] = useState("");
   const [discordName, setDiscordName] = useState("");
@@ -1303,6 +1325,7 @@ function AuthPage({ mode, go }) {
   const [headNote, setHeadNote] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
@@ -1435,16 +1458,47 @@ function AuthPage({ mode, go }) {
           className="tn-body"
           style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${C.line}`, fontSize: 14 }}
         />
-        <input
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Password"
-          type="password"
-          required
-          minLength={6}
-          className="tn-body"
-          style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${C.line}`, fontSize: 14 }}
-        />
+        {mode === "signup" && (
+          <p className="tn-body" style={{ fontSize: 12.5, color: C.slateLight, margin: 0, lineHeight: 1.5 }}>
+            Choose a strong password: at least 8 characters, mixing upper and lower case letters, numbers and a symbol. Don't reuse a password from another site.
+          </p>
+        )}
+        <div style={{ position: "relative" }}>
+          <input
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            type={showPassword ? "text" : "password"}
+            required
+            minLength={6}
+            className="tn-body"
+            style={{ padding: "12px 44px 12px 14px", borderRadius: 10, border: `1px solid ${C.line}`, fontSize: 14, width: "100%", boxSizing: "border-box" }}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((v) => !v)}
+            aria-label={showPassword ? "Hide password" : "Show password"}
+            title={showPassword ? "Hide password" : "Show password"}
+            style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", padding: 6, cursor: "pointer", color: C.slateLight, display: "flex" }}
+          >
+            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>
+        </div>
+        {mode === "signup" && password && (() => {
+          const st = passwordStrength(password);
+          return (
+            <div>
+              <div style={{ display: "flex", gap: 4, marginBottom: 6 }}>
+                {[1, 2, 3, 4].map((n) => (
+                  <div key={n} style={{ flex: 1, height: 5, borderRadius: 3, background: st.score >= n ? st.color : C.line }} />
+                ))}
+              </div>
+              <p className="tn-body" style={{ fontSize: 12.5, fontWeight: 600, color: st.color, margin: 0 }}>
+                Password strength: {st.label}
+              </p>
+            </div>
+          );
+        })()}
         {error && (
           <p className="tn-body" style={{ fontSize: 13, color: C.danger, margin: 0 }}>{error}</p>
         )}
@@ -2479,9 +2533,14 @@ export default function App() {
 
   // Signing up as a Head of Campus files a request (once) the first time the
   // person is logged in.
+  const filingHeadRequest = useRef(null);
   useEffect(() => {
     const meta = session?.user?.user_metadata;
     if (!session || !profile || meta?.member_type !== "head") return;
+    // This effect can run twice in quick succession (session + profile load);
+    // the flag makes sure only one request is filed per page load.
+    if (filingHeadRequest.current === session.user.id) return;
+    filingHeadRequest.current = session.user.id;
     supabase
       .from("head_requests")
       .select("id")
@@ -2490,12 +2549,13 @@ export default function App() {
       .then(({ data }) => {
         if (data && data.length > 0) return;
         const campus = CAMPUSES.find((c) => c.id === meta.requested_campus);
-        if (!campus) return;
+        if (!campus) { filingHeadRequest.current = null; return; }
         supabase
           .from("head_requests")
           .insert({ user_id: session.user.id, campus_id: campus.dbId, note: meta.head_note || null })
           .then(({ error }) => {
-            if (error) { console.error("Failed to file Head request:", error); return; }
+            // 23505 = the database already has a pending request: that's fine.
+            if (error && error.code !== "23505") { console.error("Failed to file Head request:", error); return; }
             fetchHeadRequest();
           });
       });
