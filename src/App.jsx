@@ -2076,15 +2076,15 @@ function ReviewPage({ go, openProject, myMentorships, onChanged }) {
   };
   useEffect(load, [campusIds.join(",")]);
 
-  // action: "approve" | "reject" | "hide". Fellows are emailed about
-  // approvals and declines by the database + Edge Function, not from here.
+  // action: "approve" | "reject" | "hide". Fellows get a Discord DM about
+  // approvals and declines from the database + Edge Function, not from here.
   const review = async (p, action) => {
     let patch;
     if (action === "approve") {
       patch = { approved: true, rejected: false, rejection_reason: null };
     } else if (action === "reject") {
       const reason = window.prompt(
-        `Decline "${p.title}"?\n\nOptional: tell the fellow why (they will see this in their email). Leave it blank to skip, or press Cancel to go back.`,
+        `Decline "${p.title}"?\n\nOptional: tell the fellow why (they will see this in their Discord message). Leave it blank to skip, or press Cancel to go back.`,
         "",
       );
       if (reason === null) return;
@@ -2143,7 +2143,7 @@ function ReviewPage({ go, openProject, myMentorships, onChanged }) {
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: "40px 24px 96px" }}>
       <GhostButton small onClick={() => go("dashboard")} style={{ marginBottom: 24 }}><ArrowLeft size={14} /> Back to dashboard</GhostButton>
-      <SectionHeading eyebrow="Mentor tools" title="Review submissions" sub="Approve or decline projects from your campus. Fellows get an email either way, and approved projects appear on Explore projects right away." />
+      <SectionHeading eyebrow="Mentor tools" title="Review submissions" sub="Approve or decline projects from your campus. Fellows get a Discord message either way, and approved projects appear on Explore projects right away." />
       {error && <p className="tn-body" style={{ fontSize: 13, color: C.danger }}>{error}</p>}
       {loading ? (
         <p className="tn-body" style={{ fontSize: 13.5, color: C.slateLight }}>Loading…</p>
