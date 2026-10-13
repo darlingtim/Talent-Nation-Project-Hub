@@ -1,5 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { supabase } from "./supabaseClient";
+
+// The Supabase Edge Function that talks to Discord (its name was set by Supabase).
+const DISCORD_FUNCTION = "swift-handler";
 import {
   Search, Menu, X, ChevronRight, ChevronDown, Heart, Bookmark, Share2, Code2,
   Link2, Globe, Users, FolderKanban, Building2, Sparkles, Eye, EyeOff, ExternalLink,
@@ -1522,7 +1525,7 @@ function AuthPage({ mode, go }) {
 
 /* -------------------------------- fellow dashboard ------------------------------- */
 
-function FellowDashboard({ go, openProject, onEdit, onProjectDeleted, session, profile, isMentor, headRequest, isOwner, pendingHeadCount }) {
+function FellowDashboard({ go, openProject, onEdit, onProjectDeleted, session, profile, isMentor, headRequest, isOwner, pendingHeadCount, discordLink, discordNotice, connectingDiscord, onConnectDiscord, onDismissDiscordNotice }) {
   const [myProjects, setMyProjects] = useState([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
@@ -1600,6 +1603,36 @@ function FellowDashboard({ go, openProject, onEdit, onProjectDeleted, session, p
         <div className="tn-body" style={{ background: C.dangerPale, border: `1px solid ${C.danger}`, borderRadius: 12, padding: "14px 18px", fontSize: 13.5, marginBottom: 24 }}>
           Your Head of Campus request wasn't approved. You still have a full account and can take part as a fellow.
         </div>
+      )}
+
+      {discordNotice && (
+        <div className="tn-body" style={{ background: discordNotice.ok ? C.tealPale : C.dangerPale, border: `1px solid ${discordNotice.ok ? C.teal : C.danger}`, borderRadius: 12, padding: "14px 18px", fontSize: 13.5, marginBottom: 24, display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+          <span>{discordNotice.text}</span>
+          <button onClick={onDismissDiscordNotice} aria-label="Dismiss" style={{ background: "none", border: "none", cursor: "pointer", color: C.slate, fontSize: 18, lineHeight: 1 }}>×</button>
+        </div>
+      )}
+      {discordLink && !discordLink.connected && (
+        <div style={{ background: "#5865F2", color: C.white, borderRadius: 14, padding: "18px 22px", marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 14 }}>
+          <div style={{ flex: "1 1 320px" }}>
+            <p className="tn-display" style={{ fontSize: 16, fontWeight: 700, margin: "0 0 4px" }}>Get your notifications on Discord</p>
+            <p className="tn-body" style={{ fontSize: 13.5, margin: 0, opacity: 0.9, lineHeight: 1.5 }}>
+              Connect your Discord account and we'll add you to the Talent Nation server automatically, so you hear about your projects right away.
+            </p>
+          </div>
+          <button
+            onClick={onConnectDiscord}
+            disabled={connectingDiscord}
+            className="tn-body"
+            style={{ background: C.white, color: "#5865F2", border: "none", borderRadius: 10, padding: "11px 18px", fontWeight: 700, fontSize: 14, cursor: connectingDiscord ? "wait" : "pointer" }}
+          >
+            {connectingDiscord ? "Connecting…" : "Connect Discord"}
+          </button>
+        </div>
+      )}
+      {discordLink?.connected && (
+        <p className="tn-body" style={{ fontSize: 12.5, color: C.slateLight, margin: "-8px 0 20px", display: "flex", alignItems: "center", gap: 6 }}>
+          <CheckCircle2 size={14} color={C.teal} /> Discord connected{discordLink.username ? ` as @${discordLink.username}` : ""}. You'll get notifications there.
+        </p>
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 40 }}>
@@ -2568,6 +2601,83 @@ export default function App() {
       });
   }, [session]);
 
+  // ---- Discord connect: one click links the account and joins the TN server ----
+  const [discordLink, setDiscordLink] = useState(null); // { connected, username }
+  const [discordNotice, setDiscordNotice] = useState(null); // { ok, text }
+  const [connectingDiscord, setConnectingDiscord] = useState(false);
+  const discordCallbackDone = useRef(false);
+
+  const fetchDiscordLink = () => {
+    if (!session) { setDiscordLink(null); return; }
+    supabase
+      .from("member_private")
+      .select("discord_user_id, discord_username")
+      .eq("user_id", session.user.id)
+      .maybeSingle()
+      .then(({ data }) => setDiscordLink({ connected: !!data?.discord_user_id, username: data?.discord_username || "" }));
+  };
+  useEffect(fetchDiscordLink, [session]);
+
+  const discordRedirectUri = () => `${window.location.origin}/`;
+
+  const startDiscordConnect = async () => {
+    setDiscordNotice(null);
+    setConnectingDiscord(true);
+    const { data, error } = await supabase.functions.invoke(DISCORD_FUNCTION, { body: { action: "discord_config" } });
+    if (error || !data?.ok) {
+      setConnectingDiscord(false);
+      setDiscordNotice({ ok: false, text: data?.message || "Couldn't start the Discord connection. Please try again later." });
+      return;
+    }
+    const state = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    try { sessionStorage.setItem("tn_discord_state", state); } catch (e) { /* private mode: state check is skipped */ }
+    const params = new URLSearchParams({
+      client_id: data.client_id,
+      response_type: "code",
+      redirect_uri: discordRedirectUri(),
+      scope: "identify guilds.join",
+      state,
+    });
+    window.location.href = `https://discord.com/oauth2/authorize?${params.toString()}`;
+  };
+
+  // Coming back from Discord: the address bar has ?code=...&state=...
+  useEffect(() => {
+    if (!session || discordCallbackDone.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    const state = params.get("state");
+    const denied = params.get("error");
+    // Only Discord sends back a "state"; this keeps us from touching other
+    // links that also use ?code= (for example Supabase email links).
+    if (!state || (!code && !denied)) return;
+    discordCallbackDone.current = true;
+    window.history.replaceState({}, "", window.location.pathname);
+    setView("dashboard");
+    if (denied) {
+      setDiscordNotice({ ok: false, text: "Discord connection was cancelled. You can try again any time." });
+      return;
+    }
+    let saved = null;
+    try { saved = sessionStorage.getItem("tn_discord_state"); sessionStorage.removeItem("tn_discord_state"); } catch (e) { /* ignore */ }
+    if (saved && saved !== state) {
+      setDiscordNotice({ ok: false, text: "That Discord sign-in didn't match. Please click Connect Discord again." });
+      return;
+    }
+    setConnectingDiscord(true);
+    supabase.functions
+      .invoke(DISCORD_FUNCTION, { body: { action: "discord_connect", code, redirect_uri: discordRedirectUri() } })
+      .then(({ data, error }) => {
+        setConnectingDiscord(false);
+        if (error || !data) {
+          setDiscordNotice({ ok: false, text: "Couldn't connect Discord. Please try again." });
+          return;
+        }
+        setDiscordNotice({ ok: !!data.ok, text: data.message });
+        fetchDiscordLink();
+      });
+  }, [session]);
+
   // Which campuses is the logged-in person a mentor (or Head) of?
   const [myMentorships, setMyMentorships] = useState([]);
   const fetchMyMentorships = () => {
@@ -2960,7 +3070,7 @@ export default function App() {
       {view === "about" && <AboutPage go={go} />}
       {view === "login" && <AuthPage mode="login" go={go} />}
       {view === "signup" && <AuthPage mode="signup" go={go} />}
-      {view === "dashboard" && <FellowDashboard go={go} openProject={openProject} onEdit={setEditingProjectId} onProjectDeleted={fetchRecentProjects} session={session} profile={profile} isMentor={isMentorUser} headRequest={headRequest} isOwner={isOwner} pendingHeadCount={pendingHeadCount} />}
+      {view === "dashboard" && <FellowDashboard go={go} openProject={openProject} onEdit={setEditingProjectId} onProjectDeleted={fetchRecentProjects} session={session} profile={profile} isMentor={isMentorUser} headRequest={headRequest} isOwner={isOwner} pendingHeadCount={pendingHeadCount} discordLink={discordLink} discordNotice={discordNotice} connectingDiscord={connectingDiscord} onConnectDiscord={startDiscordConnect} onDismissDiscordNotice={() => setDiscordNotice(null)} />}
       {view === "headRequests" && isOwner && (
         <HeadRequestsPage
           go={go}
