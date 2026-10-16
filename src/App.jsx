@@ -339,6 +339,7 @@ function NavBar({ view, go, role, displayName, avatarUrl, onLogout, mobileOpen, 
     ["explore", "Explore projects"],
     ["fellows", "Fellows"],
     ["campuses", "Campuses"],
+    ["mentors", "Coding Mentors"],
     ["anchors", "Meet the anchors"],
     ["about", "About"],
   ];
@@ -442,7 +443,7 @@ function Footer({ go }) {
           </p>
         </div>
         {[
-          ["Platform", [["explore", "Explore projects"], ["fellows", "Fellows"], ["campuses", "Campuses"]]],
+          ["Platform", [["explore", "Explore projects"], ["fellows", "Fellows"], ["campuses", "Campuses"], ["mentors", "Coding Mentors"]]],
           ["Community", [["anchors", "Meet the anchors"], ["about", "About"]]],
           ["Account", [["login", "Log in"], ["signup", "Sign up"]]],
         ].map(([title, items]) => (
@@ -942,6 +943,179 @@ function FellowProfilePage({ fellow, go, openProject }) {
 }
 
 /* ---------------------------------- campuses ---------------------------------- */
+
+/* --------------------------------- coding mentors --------------------------------- */
+
+// One mentor / Head of Campus card, with their portfolio if they uploaded one.
+function MentorCard({ m, campus, onOpen }) {
+  const p = m.profile;
+  const skills = p.skills || [];
+  const pf = m.portfolio;
+  return (
+    <div
+      onClick={onOpen || undefined}
+      style={{ cursor: onOpen ? "pointer" : "default", border: `1px solid ${m.is_head ? C.gold : C.line}`, borderRadius: 16, padding: 18, background: C.white, display: "flex", flexDirection: "column" }}
+    >
+      <Avatar name={p.full_name || "Mentor"} size={52} hue={campus?.hue || C.teal} photo={p.avatar_url} />
+      <p className="tn-display" style={{ fontWeight: 700, fontSize: 15, margin: "12px 0 2px" }}>{p.full_name || "Mentor"}</p>
+      <p className="tn-body" style={{ fontSize: 12.5, color: C.teal, fontWeight: 600, margin: "0 0 4px" }}>
+        {m.is_head ? "Head of Campus" : "Coding Mentor"}{p.user_name ? ` · @${p.user_name}` : ""}
+      </p>
+      <p className="tn-body" style={{ fontSize: 12, color: C.slate, display: "flex", alignItems: "center", gap: 4, margin: "0 0 10px" }}>
+        <MapPin size={11} /> {campus?.name || "Campus"}
+      </p>
+      {skills.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 12 }}>
+          {skills.slice(0, 3).map((s) => <Badge key={s}>{s}</Badge>)}
+        </div>
+      )}
+      {pf && (
+        <div style={{ marginTop: "auto" }} onClick={(e) => e.stopPropagation()}>
+          {pf.cover_image_url && (
+            <div style={{ width: "100%", aspectRatio: "16 / 9", borderRadius: 10, overflow: "hidden", border: `1px solid ${C.line}`, marginBottom: 10, background: C.paperDeep }}>
+              <img src={pf.cover_image_url} alt={`${p.full_name || "Mentor"}'s portfolio`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+            </div>
+          )}
+          {pf.demo_url && (
+            <PrimaryButton small onClick={() => window.open(pf.demo_url, "_blank", "noopener,noreferrer")} style={{ width: "100%", justifyContent: "center" }}>
+              <ExternalLink size={13} /> View portfolio
+            </PrimaryButton>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CodingMentorsPage({ openFellow, allFellows }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [campusFilter, setCampusFilter] = useState("All");
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      const { data: cm, error } = await supabase.from("campus_mentors").select("user_id, campus_id, is_head");
+      if (error) {
+        console.error("Failed to load coding mentors:", error);
+        setLoading(false);
+        return;
+      }
+      const list = cm || [];
+      const ids = Array.from(new Set(list.map((r) => r.user_id)));
+      let profs = [];
+      let portfolios = [];
+      if (ids.length > 0) {
+        const [{ data: p }, { data: pf }] = await Promise.all([
+          supabase.from("profiles").select("*").in("id", ids),
+          supabase
+            .from("projects")
+            .select("id, created_by, title, cover_image_url, demo_url, created_at")
+            .eq("is_portfolio", true)
+            .in("created_by", ids)
+            .order("created_at", { ascending: false }),
+        ]);
+        profs = p || [];
+        portfolios = pf || [];
+      }
+      const byId = {};
+      profs.forEach((x) => { byId[x.id] = x; });
+      const latestPortfolio = {};
+      portfolios.forEach((x) => { if (!latestPortfolio[x.created_by]) latestPortfolio[x.created_by] = x; });
+      setRows(
+        list
+          .map((r) => ({ ...r, profile: byId[r.user_id], portfolio: latestPortfolio[r.user_id] }))
+          .filter((r) => r.profile)
+          .sort((a, b) => (a.profile.full_name || "").localeCompare(b.profile.full_name || "")),
+      );
+      setLoading(false);
+    })();
+  }, []);
+
+  const q = query.trim().toLowerCase();
+  const filtered = rows.filter((r) => {
+    const campus = getCampusByDbId(r.campus_id);
+    const matchCampus = campusFilter === "All" || campus?.id === campusFilter;
+    const text = [r.profile.full_name, r.profile.user_name, ...(r.profile.skills || [])].join(" ").toLowerCase();
+    return matchCampus && (!q || text.includes(q));
+  });
+  const heads = filtered.filter((r) => r.is_head);
+  const mentors = filtered.filter((r) => !r.is_head);
+  const selectedCampus = campusFilter === "All" ? null : getCampus(campusFilter);
+
+  const grid = (list) => (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 16 }}>
+      {list.map((m) => {
+        const canOpen = allFellows.some((f) => f.id === m.user_id);
+        return (
+          <MentorCard
+            key={`${m.campus_id}-${m.user_id}`}
+            m={m}
+            campus={getCampusByDbId(m.campus_id)}
+            onOpen={canOpen ? () => openFellow(m.user_id) : null}
+          />
+        );
+      })}
+    </div>
+  );
+
+  return (
+    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "56px 24px 96px" }}>
+      <SectionHeading
+        eyebrow="Guides and builders"
+        title="Coding Mentors"
+        sub="Meet the Heads of Campus and Coding Mentors who guide Talent Nation fellows. Pick a campus to find a particular mentor."
+      />
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 32 }}>
+        <select
+          value={campusFilter}
+          onChange={(e) => setCampusFilter(e.target.value)}
+          className="tn-body"
+          style={{ padding: "10px 12px", borderRadius: 10, border: `1px solid ${C.line}`, fontSize: 13.5, background: C.white, minWidth: 220 }}
+        >
+          <option value="All">All campuses</option>
+          {CAMPUSES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <div style={{ position: "relative", flex: "1 1 260px" }}>
+          <Search size={15} color={C.slateLight} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by name or skill"
+            className="tn-body"
+            style={{ width: "100%", padding: "10px 12px 10px 36px", borderRadius: 10, border: `1px solid ${C.line}`, fontSize: 13.5, boxSizing: "border-box" }}
+          />
+        </div>
+      </div>
+
+      {loading ? (
+        <p className="tn-body" style={{ fontSize: 13.5, color: C.slateLight }}>Loading…</p>
+      ) : (
+        <>
+          <p className="tn-display" style={{ fontSize: 18, fontWeight: 700, margin: "0 0 16px" }}>
+            {selectedCampus ? `Head of ${selectedCampus.name}` : "Heads of Campus"}
+          </p>
+          {heads.length === 0 ? (
+            <p className="tn-body" style={{ fontSize: 13.5, color: C.slateLight, margin: "0 0 40px" }}>
+              {selectedCampus ? "This campus doesn't have a Head yet." : "No Heads of Campus match your search."}
+            </p>
+          ) : (
+            <div style={{ marginBottom: 48 }}>{grid(heads)}</div>
+          )}
+
+          <p className="tn-display" style={{ fontSize: 18, fontWeight: 700, margin: "0 0 16px" }}>
+            {selectedCampus ? `Coding Mentors at ${selectedCampus.name}` : "All Coding Mentors"}
+          </p>
+          {mentors.length === 0 ? (
+            <p className="tn-body" style={{ fontSize: 13.5, color: C.slateLight, margin: 0 }}>
+              {selectedCampus ? "No coding mentors have been added to this campus yet." : "No coding mentors match your search."}
+            </p>
+          ) : grid(mentors)}
+        </>
+      )}
+    </div>
+  );
+}
 
 function CampusesPage({ go, campusStats }) {
   return (
@@ -3122,6 +3296,7 @@ export default function App() {
       {view === "fellows" && <FellowsPage go={go} openFellow={openFellow} fellows={fellows} projectCounts={projectCounts} loadingFellows={loadingFellows} />}
       {view === "fellow" && <FellowProfilePage fellow={fellow} go={go} openProject={openProject} />}
       {view === "campuses" && <CampusesPage go={go} campusStats={campusStats} />}
+      {view === "mentors" && <CodingMentorsPage openFellow={openFellow} allFellows={fellows} />}
       {view === "campus" && <CampusDetailPage campus={campus} go={go} openFellow={openFellow} openProject={openProject} allFellows={fellows} myMentorships={myMentorships} onMentorsChanged={fetchMyMentorships} />}
       {view === "anchors" && <AnchorsPage go={go} openAnchor={openAnchor} />}
       {view === "anchor" && <AnchorDetailPage anchor={anchor} go={go} />}
