@@ -1527,7 +1527,7 @@ function AuthPage({ mode, go }) {
         password,
         options: { data: {
           full_name: fullName,
-          discord_username: discordName.trim(),
+          discord_username: discordName.trim() || null,
           member_type: memberType,
           ...(memberType === "head" ? { requested_campus: requestedCampus, head_note: headNote.trim() } : {}),
         } },
@@ -1598,8 +1598,7 @@ function AuthPage({ mode, go }) {
           <input
             value={discordName}
             onChange={(e) => setDiscordName(e.target.value)}
-            placeholder="Discord username (e.g. amakaobi)"
-            required
+            placeholder="Discord username (optional, you can connect Discord after signing up)"
             className="tn-body"
             style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${C.line}`, fontSize: 14 }}
           />
