@@ -774,7 +774,9 @@ function ExternalLinkIcon(props) { return <Globe {...props} />; }
 
 /* ----------------------------------- fellows ---------------------------------- */
 
-function FellowsPage({ go, openFellow, fellows, projectCounts, loadingFellows }) {
+function FellowsPage({ go, openFellow, fellows: everyone, projectCounts, loadingFellows }) {
+  // Mentors and Heads of Campus have their own page (Coding Mentors).
+  const fellows = everyone.filter((f) => !f.isMentor);
   const [query, setQuery] = useState("");
   const [campus, setCampus] = useState("All");
   const [skill, setSkill] = useState("All");
