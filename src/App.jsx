@@ -584,7 +584,7 @@ function ExplorePage({ go, openProject, liked, bookmarked, onLike, onBookmark, p
   const filtered = useMemo(() => {
     let list = projects.filter((p) => {
       const matchQuery = query.trim() === "" || p.title.toLowerCase().includes(query.toLowerCase()) || p.shortDesc.toLowerCase().includes(query.toLowerCase());
-      const matchCategory = category === "All" || p.category === category;
+      const matchCategory = category === "All" || p.category === category || (category === "Others" && !CATEGORIES.includes(p.category));
       const matchCampus = campus === "All" || p.campusId === campus;
       const matchStatus = status === "All" || p.status === status;
       return matchQuery && matchCategory && matchCampus && matchStatus;
@@ -619,6 +619,7 @@ function ExplorePage({ go, openProject, liked, bookmarked, onLike, onBookmark, p
         <select value={category} onChange={(e) => setCategory(e.target.value)} className="tn-body" style={selectStyle}>
           <option>All</option>
           {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+          <option value="Others">Others</option>
         </select>
         <select value={campus} onChange={(e) => setCampus(e.target.value)} className="tn-body" style={selectStyle}>
           <option value="All">All campuses</option>
@@ -1039,6 +1040,7 @@ function CampusDetailPage({ campus, go, openFellow, openProject, allFellows, myM
       .from("projects")
       .select("*")
       .eq("campus_id", campus.dbId)
+      .eq("is_portfolio", false)
       .order("created_at", { ascending: false })
       .then(({ data, error }) => {
         setLoadingProjects(false);
@@ -1675,7 +1677,9 @@ function FellowDashboard({ go, openProject, onEdit, onProjectDeleted, session, p
                   <StatusDot status={p.status} /> {p.status} · {(p.views || 0).toLocaleString()} views
                 </p>
                 <div style={{ marginTop: 8 }}>
-                  {p.approved ? (
+                  {p.is_portfolio ? (
+                    <Badge tone="neutral">Portfolio · shown on your profile</Badge>
+                  ) : p.approved ? (
                     <Badge tone="teal">Approved · live on Explore</Badge>
                   ) : p.rejected ? (
                     <Badge tone="danger">Declined</Badge>
@@ -1683,7 +1687,7 @@ function FellowDashboard({ go, openProject, onEdit, onProjectDeleted, session, p
                     <Badge tone="gold">Waiting for review</Badge>
                   )}
                 </div>
-                {p.rejected && !p.approved && (
+                {p.rejected && !p.approved && !p.is_portfolio && (
                   <p className="tn-body" style={{ fontSize: 12.5, color: C.slate, margin: "8px 0 0", maxWidth: 480, lineHeight: 1.5 }}>
                     {p.rejection_reason ? `Mentor's note: ${p.rejection_reason}. ` : ""}Edit it and save to send it back for review.
                   </p>
@@ -1820,13 +1824,14 @@ function Field({ label, children }) {
   );
 }
 
-function SubmitProjectPage({ go, session, onSubmitted, editId, isMentor }) {
+function SubmitProjectPage({ go, session, onSubmitted, editId, isMentor, profile, mentorCampusId }) {
   const [title, setTitle] = useState("");
   const [shortDesc, setShortDesc] = useState("");
   const [fullDesc, setFullDesc] = useState("");
   const [problem, setProblem] = useState("");
   const [solution, setSolution] = useState("");
   const [category, setCategory] = useState("");
+  const [customCategory, setCustomCategory] = useState("");
   const [campusSlug, setCampusSlug] = useState("");
   const [status, setStatus] = useState("Ongoing");
   const [year, setYear] = useState(new Date().getFullYear());
@@ -1864,7 +1869,12 @@ function SubmitProjectPage({ go, session, onSubmitted, editId, isMentor }) {
         setFullDesc(data.full_description || "");
         setProblem(data.problem_statement || "");
         setSolution(data.solution || "");
-        setCategory(data.category || "");
+        if (data.category && !CATEGORIES.includes(data.category)) {
+          setCategory("Others");
+          setCustomCategory(data.category);
+        } else {
+          setCategory(data.category || "");
+        }
         setCampusSlug(campus?.id || "");
         setStatus(data.status || "Ongoing");
         setYear(data.year || new Date().getFullYear());
@@ -1888,18 +1898,32 @@ function SubmitProjectPage({ go, session, onSubmitted, editId, isMentor }) {
     e.preventDefault();
     setError("");
 
-    if (!title || !shortDesc || !category || !campusSlug) {
-      setError("Please fill in the project title, short description, category, and campus.");
-      return;
-    }
-    if (isMentor && !demoUrl.trim()) {
-      setError("Please add the link to your live portfolio so people can view it.");
-      return;
-    }
-    const campus = CAMPUSES.find((c) => c.id === campusSlug);
-    if (!campus?.dbId) {
-      setError("That campus isn't available right now — try refreshing the page.");
-      return;
+    const finalCategory = category === "Others" ? customCategory.trim() : category;
+    let campus = null;
+    if (isMentor) {
+      // Mentors and Heads only upload a portfolio: picture + links.
+      if (!demoUrl.trim()) {
+        setError("Please add the link to your live portfolio so people can view it.");
+        return;
+      }
+      if (!coverFile && !existingCoverUrl) {
+        setError("Please add a picture of your portfolio.");
+        return;
+      }
+    } else {
+      if (!title || !shortDesc || !category || !campusSlug) {
+        setError("Please fill in the project title, short description, category, and campus.");
+        return;
+      }
+      if (category === "Others" && !finalCategory) {
+        setError("Please type your category.");
+        return;
+      }
+      campus = CAMPUSES.find((c) => c.id === campusSlug);
+      if (!campus?.dbId) {
+        setError("That campus isn't available right now — try refreshing the page.");
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -1921,14 +1945,29 @@ function SubmitProjectPage({ go, session, onSubmitted, editId, isMentor }) {
       coverImageUrl = urlData.publicUrl;
     }
 
-    const payload = {
+    const mentorName = profile?.full_name || session.user.user_metadata?.full_name || "Mentor";
+    const portfolioTitle = title || `${mentorName}'s portfolio`;
+    const payload = isMentor ? {
+      title: portfolioTitle,
+      slug: slugify(portfolioTitle),
+      short_description: shortDesc || "Mentor portfolio",
+      category: "Portfolio",
+      campus_id: mentorCampusId || null,
+      status: "Completed",
+      year: Number(year) || new Date().getFullYear(),
+      is_portfolio: true,
+      technologies: techText.split(",").map((t) => t.trim()).filter(Boolean),
+      github_url: githubUrl || null,
+      demo_url: demoUrl.trim() ? (/^https?:\/\//i.test(demoUrl.trim()) ? demoUrl.trim() : `https://${demoUrl.trim()}`) : null,
+      cover_image_url: coverImageUrl,
+    } : {
       title,
       slug: slugify(title),
       short_description: shortDesc,
       full_description: fullDesc,
       problem_statement: problem,
       solution,
-      category,
+      category: finalCategory,
       campus_id: campus.dbId,
       status,
       year: Number(year),
@@ -1966,9 +2005,11 @@ function SubmitProjectPage({ go, session, onSubmitted, editId, isMentor }) {
       <SectionHeading
         eyebrow={editId ? "Edit submission" : isMentor ? "New portfolio" : "New submission"}
         title={editId ? (isMentor ? "Edit portfolio" : "Edit project") : isMentor ? "Upload portfolio" : "Submit a project"}
-        sub={editId ? (isMentor ? "Update your portfolio details below." : "Update your project's details below.") : isMentor ? "Share your own work as a mentor. It's reviewed before it appears publicly." : "Add your project to the Project Hub. An admin will review it before it's featured publicly."}
+        sub={editId ? (isMentor ? "Update your portfolio details below." : "Update your project's details below.") : isMentor ? "Add a picture of your portfolio and the link to it. Portfolios appear on your profile, not in Spotlight or Explore." : "Add your project to the Project Hub. An admin will review it before it's featured publicly."}
       />
       <form onSubmit={handleSubmit} style={{ border: `1px solid ${C.line}`, borderRadius: 16, padding: 28, display: "flex", flexDirection: "column", gap: 18 }}>
+        {!isMentor && (
+          <>
         <Field label="Project title *">
           <input value={title} onChange={(e) => setTitle(e.target.value)} className="tn-body" style={inputStyle} />
         </Field>
@@ -1990,7 +2031,18 @@ function SubmitProjectPage({ go, session, onSubmitted, editId, isMentor }) {
             <select value={category} onChange={(e) => setCategory(e.target.value)} className="tn-body" style={inputStyle}>
               <option value="">Select a category</option>
               {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+              <option value="Others">Others</option>
             </select>
+            {category === "Others" && (
+              <input
+                value={customCategory}
+                onChange={(e) => setCustomCategory(e.target.value)}
+                placeholder="Type your category"
+                className="tn-body"
+                style={{ ...inputStyle, marginTop: 8 }}
+                autoFocus
+              />
+            )}
           </Field>
           <Field label="Campus *">
             <select value={campusSlug} onChange={(e) => setCampusSlug(e.target.value)} className="tn-body" style={inputStyle}>
@@ -2007,6 +2059,8 @@ function SubmitProjectPage({ go, session, onSubmitted, editId, isMentor }) {
             <input type="number" value={year} onChange={(e) => setYear(e.target.value)} className="tn-body" style={inputStyle} />
           </Field>
         </div>
+          </>
+        )}
 
         {isMentor ? (
           <Field label="Portfolio picture">
@@ -2089,6 +2143,7 @@ function ReviewPage({ go, openProject, myMentorships, onChanged }) {
       .from("projects")
       .select("*")
       .in("campus_id", campusIds)
+      .eq("is_portfolio", false)
       .order("created_at", { ascending: false })
       .then(async ({ data, error: loadError }) => {
         setLoading(false);
@@ -2913,6 +2968,7 @@ export default function App() {
     supabase
       .from("projects")
       .select("id, created_by, campus_id")
+      .eq("is_portfolio", false)
       .then(({ data, error }) => {
         if (error) {
           console.error("Failed to load project counts:", error);
@@ -2964,6 +3020,7 @@ export default function App() {
       .from("projects")
       .select("*")
       .eq("approved", true)
+      .eq("is_portfolio", false)
       .order("created_at", { ascending: false })
       .then(({ data, error }) => {
         setLoadingExplore(false);
@@ -2983,6 +3040,7 @@ export default function App() {
       .from("projects")
       .select("*")
       .eq("approved", true)
+      .eq("is_portfolio", false)
       .order("created_at", { ascending: false })
       .limit(6)
       .then(({ data, error }) => {
@@ -3103,6 +3161,8 @@ export default function App() {
           onSubmitted={() => { fetchRecentProjects(); setEditingProjectId(null); }}
           editId={editingProjectId}
           isMentor={isMentorUser}
+          profile={profile}
+          mentorCampusId={myMentorships[0]?.campus_id || null}
         />
       )}
 
