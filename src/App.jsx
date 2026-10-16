@@ -30,6 +30,25 @@ const FONTS = `
   @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
   .tn-display { font-family: 'Space Grotesk', sans-serif; }
   .tn-body { font-family: 'Inter', sans-serif; }
+
+  /* Use the whole screen. The starter CSS that came with Vite squeezed the
+     site into a narrow, centred box; these rules undo that. */
+  html, body { margin: 0; padding: 0; width: 100%; }
+  body { display: block !important; place-items: initial !important; min-width: 0 !important; background: #F9F9FB; }
+  #root { max-width: none !important; width: 100% !important; margin: 0 !important; padding: 0 !important; text-align: left !important; }
+  img { max-width: 100%; }
+
+  /* Tablets: fixed grids drop to two columns */
+  @media (max-width: 900px) {
+    [style*="grid-template-columns"]:not([style*="auto-fi"]) { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  }
+  /* Phones: one column, a little less padding */
+  @media (max-width: 560px) {
+    [style*="grid-template-columns"]:not([style*="auto-fi"]) { grid-template-columns: minmax(0, 1fr) !important; }
+    [style*="grid-template-columns: repeat(4"]:not([style*="auto-fi"]) { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+    h1.tn-display { font-size: 28px !important; }
+    h2.tn-display { font-size: 26px !important; }
+  }
 `;
 
 /* ----------------------------------- data ----------------------------------- */
@@ -345,7 +364,7 @@ function NavBar({ view, go, role, displayName, avatarUrl, onLogout, mobileOpen, 
   ];
   return (
     <div style={{ position: "sticky", top: 0, zIndex: 50, background: C.white, borderBottom: `1px solid ${C.line}` }}>
-      <div style={{ maxWidth: 1180, margin: "0 auto", padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 68 }}>
+      <div style={{ maxWidth: 1440, margin: "0 auto", padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 68 }}>
         <div onClick={() => go("home")} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
           <img src="/logo.png" alt="Talent Nation" style={{ height: 36, width: "auto", display: "block" }} />
           <div>
@@ -435,7 +454,7 @@ function NavBar({ view, go, role, displayName, avatarUrl, onLogout, mobileOpen, 
 function Footer({ go }) {
   return (
     <div style={{ background: C.ink, marginTop: 80 }}>
-      <div style={{ maxWidth: 1180, margin: "0 auto", padding: "56px 24px 32px", display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr 1fr", gap: 32 }}>
+      <div style={{ maxWidth: 1440, margin: "0 auto", padding: "56px 24px 32px", display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr 1fr", gap: 32 }}>
         <div>
           <p className="tn-display" style={{ color: C.white, fontSize: 18, fontWeight: 700, margin: "0 0 10px" }}>Talent Nation Project Hub</p>
           <p className="tn-body" style={{ color: "rgba(255,255,255,0.55)", fontSize: 13.5, lineHeight: 1.6, maxWidth: 280 }}>
@@ -460,7 +479,7 @@ function Footer({ go }) {
         ))}
       </div>
       <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", padding: "18px 24px" }}>
-        <p className="tn-body" style={{ maxWidth: 1180, margin: "0 auto", color: "rgba(255,255,255,0.4)", fontSize: 12.5 }}>
+        <p className="tn-body" style={{ maxWidth: 1440, margin: "0 auto", color: "rgba(255,255,255,0.4)", fontSize: 12.5 }}>
           © 2026 Talent Nation. Prototype build for review — not connected to live data.
         </p>
       </div>
@@ -520,7 +539,7 @@ function HomePage({ go, openProject, liked, bookmarked, onLike, onBookmark, rece
         </div>
       </div>
 
-      <div style={{ maxWidth: 1180, margin: "0 auto", padding: "72px 24px 0" }}>
+      <div style={{ maxWidth: 1440, margin: "0 auto", padding: "72px 24px 0" }}>
         <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
           <SectionHeading
             eyebrow="Spotlight"
@@ -541,7 +560,7 @@ function HomePage({ go, openProject, liked, bookmarked, onLike, onBookmark, rece
         )}
       </div>
 
-      <div style={{ maxWidth: 1180, margin: "0 auto", padding: "80px 24px 0" }}>
+      <div style={{ maxWidth: 1440, margin: "0 auto", padding: "80px 24px 0" }}>
         <SectionHeading eyebrow="Where fellows learn" title="Our campuses" sub="Eight campuses, each with its own strengths and specialties." />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
           {CAMPUSES.map((c) => (
@@ -557,7 +576,7 @@ function HomePage({ go, openProject, liked, bookmarked, onLike, onBookmark, rece
         </div>
       </div>
 
-      <div style={{ maxWidth: 1180, margin: "0 auto", padding: "80px 24px 96px" }}>
+      <div style={{ maxWidth: 1440, margin: "0 auto", padding: "80px 24px 96px" }}>
         <div style={{ background: C.teal, borderRadius: 24, padding: "56px 48px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 24 }}>
           <div style={{ maxWidth: 460 }}>
             <h3 className="tn-display" style={{ color: C.white, fontSize: 26, fontWeight: 700, margin: "0 0 10px" }}>Meet the visionaries building the future of tech talent.</h3>
@@ -603,7 +622,7 @@ function ExplorePage({ go, openProject, liked, bookmarked, onLike, onBookmark, p
   };
 
   return (
-    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "48px 24px 96px" }}>
+    <div style={{ maxWidth: 1440, margin: "0 auto", padding: "48px 24px 96px" }}>
       <SectionHeading eyebrow="Discover" title="Explore projects" sub={`Browse ${projects.length} approved project${projects.length !== 1 ? "s" : ""} built by Talent Nation fellows. Filter by category, campus, and status.`} />
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 28, alignItems: "center" }}>
@@ -792,7 +811,7 @@ function FellowsPage({ go, openFellow, fellows: everyone, projectCounts, loading
   const selectStyle = { padding: "10px 12px", borderRadius: 10, border: `1px solid ${C.line}`, fontSize: 13, background: C.white };
 
   return (
-    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "48px 24px 96px" }}>
+    <div style={{ maxWidth: 1440, margin: "0 auto", padding: "48px 24px 96px" }}>
       <SectionHeading eyebrow="Community" title="Fellows" sub="Search and filter fellows across all Talent Nation campuses." />
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 28 }}>
         <div style={{ position: "relative", flex: "1 1 260px" }}>
@@ -1062,7 +1081,7 @@ function CodingMentorsPage({ openFellow, allFellows }) {
   );
 
   return (
-    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "56px 24px 96px" }}>
+    <div style={{ maxWidth: 1440, margin: "0 auto", padding: "56px 24px 96px" }}>
       <SectionHeading
         eyebrow="Guides and builders"
         title="Coding Mentors"
@@ -1121,7 +1140,7 @@ function CodingMentorsPage({ openFellow, allFellows }) {
 
 function CampusesPage({ go, campusStats }) {
   return (
-    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "48px 24px 96px" }}>
+    <div style={{ maxWidth: 1440, margin: "0 auto", padding: "48px 24px 96px" }}>
       <SectionHeading eyebrow="Where fellows learn" title="Campuses" sub="Every fellow belongs to a Talent Nation campus. Explore each one and the projects it has produced." />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 20 }}>
         {CAMPUSES.map((c) => (
@@ -1912,7 +1931,7 @@ function AdminDashboard() {
   ];
 
   return (
-    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "40px 24px 96px" }}>
+    <div style={{ maxWidth: 1440, margin: "0 auto", padding: "40px 24px 96px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 28 }}>
         <LayoutDashboard size={20} color={C.ink} />
         <p className="tn-display" style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Administrator dashboard</p>
