@@ -29,7 +29,7 @@ export function Footer({ go }) {
       </div>
       <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", padding: "18px 24px" }}>
         <p className="tn-body" style={{ maxWidth: 1440, margin: "0 auto", color: "rgba(255,255,255,0.4)", fontSize: 12.5 }}>
-          © 2026 Talent Nation. Prototype build for review — not connected to live data.
+          © {new Date().getFullYear()} Talent Nation. All rights reserved.
         </p>
       </div>
     </div>
